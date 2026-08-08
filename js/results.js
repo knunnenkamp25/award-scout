@@ -162,14 +162,15 @@ function renderBest() {
     const rank = `<span class="rank">#${i + 1}</span>`;
     const head = `<div class="dest-head">${rank}<h3>${r.meta.city}</h3><span class="dest-code">${r.meta.code}${r.meta.country ? " · " + r.meta.country : ""}</span>${r.value != null ? `<span class="value-badge ${r.value >= 1.2 ? "good" : ""}">${r.value.toFixed(1)}¢/mi</span>` : ""}</div>`;
 
+    const cashLabel = DATA.cash?.mode === "anchor" ? "Cash benchmark" : "Cheapest cash";
     const cashHtml = r.cash
       ? `<div class="price-block">
-           <div class="price-label">Cheapest cash</div>
+           <div class="price-label">${cashLabel}</div>
            <div class="price-big">${currency}${Math.round(r.cash.price).toLocaleString()}</div>
            <div class="price-sub">${shortDate(r.cash.dep)} → ${shortDate(r.cash.ret)} (${nightsBetween(r.cash.dep, r.cash.ret)}n) · per person</div>
            <a class="link-btn" target="_blank" rel="noopener" href="${gfLink(opts.origin, r.meta.code, { dep: r.cash.dep, ret: r.cash.ret }, { nonstop: false, cabin: opts.cabin === "business" ? "business class" : "economy" })}">Verify on Google Flights</a>
          </div>`
-      : `<div class="price-block muted-block"><div class="price-label">Cheapest cash</div><div class="price-sub">no data for this route</div></div>`;
+      : `<div class="price-block muted-block"><div class="price-label">${cashLabel}</div><div class="price-sub">no data for this route</div></div>`;
 
     const awardHtml = r.award ? awardBlock("Best with your points", r.award, opts) : `<div class="price-block muted-block"><div class="price-label">Best with your points</div><div class="price-sub">no award space found</div></div>`;
 

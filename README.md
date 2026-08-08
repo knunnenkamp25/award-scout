@@ -23,10 +23,12 @@ The repo ships with clearly-labeled **sample data** so the UI works out of the b
 
 | Secret name | Where to get it | Cost | Powers |
 |---|---|---|---|
-| `SEATS_AERO_API_KEY` | [seats.aero Pro](https://seats.aero/pro) → account settings → API | $9.99/mo | Award availability & miles pricing across Delta, Flying Blue, Virgin Atlantic, Aeroplan, Avios, and more |
-| `AMADEUS_CLIENT_ID` + `AMADEUS_CLIENT_SECRET` | [developers.amadeus.com](https://developers.amadeus.com) → free account → create an app | Free | Cheapest cash round-trip per route/date window |
+| `SEATS_AERO_API_KEY` | [seats.aero Pro](https://seats.aero/pro) → account settings → API | $9.99/mo | Award availability & miles pricing across Delta, Flying Blue, Virgin Atlantic, Aeroplan, Avios, and more — refreshed twice daily |
+| `SERPAPI_KEY` | [serpapi.com](https://serpapi.com) → free account → API key | Free (100 searches/mo) | Cash benchmark per destination from Google Flights — refreshed on the 1st & 15th (an anchor round-trip in the middle of the window; feeds the ¢/mile value math) |
 
-Either feed works alone. After adding secrets, run the workflow once by hand: Actions tab → "Refresh price data" → Run workflow. The Amadeus **test sandbox** (default) has limited route coverage; once comfortable, create a production key set and set a repository *variable* `AMADEUS_ENV` = `production`.
+Either feed works alone. After adding secrets, run each workflow once by hand: Actions tab → "Refresh price data" / "Refresh cash benchmarks" → Run workflow.
+
+> **Note:** Amadeus Self-Service (this project's original cash source) shut down for new registrations in July 2026, which is why cash comes from SerpAPI's Google Flights engine instead.
 
 The award fetcher uses the [seats.aero Partner API](https://developers.seats.aero/) (personal, non-commercial use per their terms). Round trips are computed as best outbound + best return one-way awards, which may come from two different programs — that's real bookability, since one-way awards book independently.
 

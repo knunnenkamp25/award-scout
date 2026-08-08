@@ -1,12 +1,11 @@
-name: Refresh price data
+name: Refresh cash benchmarks
 
+# Cash benchmarks move slowly and only feed the cents-per-mile math, so a
+# twice-monthly refresh keeps SerpAPI's free plan (100 searches/mo) ample.
 on:
   schedule:
-    - cron: "17 3,15 * * *" # twice daily
+    - cron: "23 6 1,15 * *"
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: [data/config.json]
 
 permissions:
   contents: write
@@ -21,10 +20,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: Fetch award availability (seats.aero)
+      - name: Fetch cash prices (SerpAPI / Google Flights)
         env:
-          SEATS_AERO_API_KEY: ${{ secrets.SEATS_AERO_API_KEY }}
-        run: node scripts/fetch_awards.mjs
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+        run: node scripts/fetch_cash.mjs
 
       - name: Commit updated data
         run: |
@@ -34,6 +33,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No data changes."
           else
-            git commit -m "Refresh price data [skip ci]"
+            git commit -m "Refresh cash benchmarks [skip ci]"
             git push
           fi

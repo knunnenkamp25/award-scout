@@ -1,89 +1,82 @@
-// Fetch cheapest cash round-trip prices from the Amadeus Self-Service
-// "Flight Cheapest Date Search" API and write data/cash.json.
-// Free developer account: https://developers.amadeus.com
-// Set AMADEUS_ENV=production (repo variable) once you move off the test sandbox.
+// Fetch benchmark cash prices via SerpAPI's Google Flights engine and write
+// data/cash.json. One call per origin-destination pair on an anchor date in
+// the middle of the window, so the free plan (100 searches/month) easily
+// covers a twice-monthly refresh. (Amadeus Self-Service, the previous source,
+// was decommissioned in July 2026.)
 import fs from "node:fs";
 
-const ID = process.env.AMADEUS_CLIENT_ID;
-const SECRET = process.env.AMADEUS_CLIENT_SECRET;
-if (!ID || !SECRET) {
-  console.log("AMADEUS_CLIENT_ID / AMADEUS_CLIENT_SECRET not set — skipping cash fetch.");
+const KEY = process.env.SERPAPI_KEY;
+if (!KEY) {
+  console.log("SERPAPI_KEY not set — skipping cash fetch.");
   process.exit(0);
 }
 
-const BASE =
-  process.env.AMADEUS_ENV === "production"
-    ? "https://api.amadeus.com"
-    : "https://test.api.amadeus.com";
-
 const cfg = JSON.parse(fs.readFileSync("data/config.json", "utf8"));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function getToken() {
-  const res = await fetch(BASE + "/v1/security/oauth2/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "client_credentials",
-      client_id: ID,
-      client_secret: SECRET,
-    }),
-  });
-  if (!res.ok) throw new Error(`Amadeus auth ${res.status}: ${await res.text()}`);
-  return (await res.json()).access_token;
+// Anchor trip: centered in the window, median length.
+const start = new Date(cfg.window.start + "T00:00:00Z");
+const end = new Date(cfg.window.end + "T00:00:00Z");
+const nights = Math.round((cfg.nights.min + cfg.nights.max) / 2);
+const mid = new Date((start.getTime() + end.getTime()) / 2);
+const dep = new Date(mid);
+dep.setUTCDate(dep.getUTCDate() - Math.ceil(nights / 2));
+const ret = new Date(dep);
+ret.setUTCDate(ret.getUTCDate() + nights);
+const iso = (d) => d.toISOString().slice(0, 10);
+
+function lowestPrice(json) {
+  if (json.price_insights?.lowest_price) return json.price_insights.lowest_price;
+  const all = [...(json.best_flights || []), ...(json.other_flights || [])]
+    .map((f) => f.price)
+    .filter(Boolean);
+  return all.length ? Math.min(...all) : null;
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const token = await getToken();
-
-// Latest useful departure still fits a minimum-length trip inside the window.
-const latestDep = new Date(cfg.window.end + "T00:00:00Z");
-latestDep.setUTCDate(latestDep.getUTCDate() - cfg.nights.min);
-const depRange = `${cfg.window.start},${latestDep.toISOString().slice(0, 10)}`;
-
 const entries = [];
-let currency = "USD";
 for (const origin of cfg.origins) {
   for (const dest of cfg.destinations) {
     const p = new URLSearchParams({
-      origin,
-      destination: dest,
-      departureDate: depRange,
-      oneWay: "false",
-      duration: `${cfg.nights.min},${cfg.nights.max}`,
-      nonStop: "false",
-      viewBy: "DATE",
+      engine: "google_flights",
+      departure_id: origin,
+      arrival_id: dest,
+      outbound_date: iso(dep),
+      return_date: iso(ret),
+      currency: "USD",
+      adults: String(cfg.adults || 2),
+      hl: "en",
+      api_key: KEY,
     });
-    const res = await fetch(BASE + "/v1/shopping/flight-dates?" + p, {
-      headers: { Authorization: "Bearer " + token },
-    });
-    if (res.status === 404) {
-      // Route not in Amadeus's cache (common in the test sandbox) — skip it.
-      console.log(`no cash data for ${origin}-${dest}`);
-      await sleep(120);
-      continue;
+    try {
+      const res = await fetch("https://serpapi.com/search.json?" + p);
+      if (!res.ok) {
+        console.log(`SerpAPI ${res.status} for ${origin}-${dest}: ${await res.text()}`);
+        continue;
+      }
+      const json = await res.json();
+      const price = lowestPrice(json);
+      if (price) {
+        // Round-trip total is per person; store per-person like awards.
+        entries.push({ origin, dest, dep: iso(dep), ret: iso(ret), price });
+        console.log(`${origin}-${dest}: $${price}`);
+      } else {
+        console.log(`${origin}-${dest}: no price returned`);
+      }
+    } catch (err) {
+      console.log(`fetch failed for ${origin}-${dest}: ${err.message}`);
     }
-    if (!res.ok) {
-      console.log(`Amadeus ${res.status} for ${origin}-${dest}: ${await res.text()}`);
-      await sleep(120);
-      continue;
-    }
-    const json = await res.json();
-    currency = json?.meta?.currency || currency;
-    for (const d of json.data || []) {
-      entries.push({
-        origin,
-        dest,
-        dep: d.departureDate,
-        ret: d.returnDate,
-        price: Number(d.price?.total),
-      });
-    }
-    await sleep(120); // stay under sandbox rate limits
+    await sleep(1100);
   }
 }
 
 fs.writeFileSync(
   "data/cash.json",
-  JSON.stringify({ generated: new Date().toISOString(), sample: false, currency, entries })
+  JSON.stringify({
+    generated: new Date().toISOString(),
+    sample: false,
+    mode: "anchor",
+    currency: "USD",
+    entries,
+  })
 );
-console.log(`Wrote data/cash.json with ${entries.length} entries (${currency}).`);
+console.log(`Wrote data/cash.json with ${entries.length} entries.`);
