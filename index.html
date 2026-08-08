@@ -28,6 +28,10 @@
   <div class="card controls-card">
     <div class="controls-row">
       <label class="field">
+        <span class="field-label">When</span>
+        <select id="best-window"></select>
+      </label>
+      <label class="field">
         <span class="field-label">From</span>
         <select id="best-origin"></select>
       </label>
@@ -60,6 +64,17 @@
       <label class="check-inline"><input type="checkbox" id="best-nonstop"> Nonstop award only</label>
       <label class="check-inline"><input type="checkbox" id="best-seats" checked> Seats for whole family</label>
       <label class="check-inline"><input type="checkbox" id="best-allprograms"> Include non-Amex programs</label>
+      <span class="check-inline bonus-inline">Amex transfer bonus:
+        <select id="bonus-program">
+          <option value="">none</option>
+          <option value="virginatlantic">Virgin Atlantic</option>
+          <option value="flyingblue">Flying Blue</option>
+          <option value="british">BA Avios</option>
+          <option value="aeroplan">Aeroplan</option>
+          <option value="iberia">Iberia Avios</option>
+        </select>
+        <input type="number" id="bonus-pct" min="10" max="50" step="5" value="30" style="width:3.6rem" aria-label="Bonus percent">%
+      </span>
     </div>
   </div>
   <div id="best-results"></div>
@@ -228,7 +243,8 @@
 </main>
 
 <footer>
-  <p>Award Scout · static site, no tracking, data stays in your browser · <a href="https://github.com/" id="repo-link">source</a></p>
+  <p id="health-line" class="health-line"></p>
+  <p>Award Scout · static site, no tracking, data stays in your browser · <a href="https://github.com/knunnenkamp25/award-scout" id="repo-link">source</a></p>
 </footer>
 
 <script src="js/destinations.js"></script>

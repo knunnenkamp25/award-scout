@@ -54,13 +54,23 @@ function fmtMiles(n) {
 }
 
 /* ---------- per-destination computation ---------- */
+// WIN is the currently selected travel window; set by renderBest.
+let WIN = null;
+
+// Transfer bonus: {program, pct} or null. Effective miles = miles / (1+pct).
+let BONUS = JSON.parse(localStorage.getItem("awardscout.bonus") || "null");
+function effLegMiles(e) {
+  return BONUS && e.program === BONUS.program ? e.miles / (1 + BONUS.pct / 100) : e.miles;
+}
+
 // `origins` is a list: pass all home airports for "Any airport" mode.
 function bestCash(origins, dest) {
-  if (!DATA.cash) return null;
-  const { min, max } = DATA.config.nights;
+  if (!DATA.cash || !WIN) return null;
+  const { min, max } = WIN.nights;
   let best = null;
   for (const e of DATA.cash.entries) {
     if (!origins.includes(e.origin) || e.dest !== dest || !e.price) continue;
+    if (e.dep < WIN.start || e.dep > WIN.end) continue;
     const n = nightsBetween(e.dep, e.ret);
     if (n < min || n > max) continue;
     if (!best || e.price < best.price) best = e;
@@ -70,6 +80,7 @@ function bestCash(origins, dest) {
 
 function awardLegs(origins, dest, direction, cabin, opts) {
   return DATA.awards.entries.filter((e) => {
+    if (e.date < WIN.start || e.date > WIN.end) return false;
     const home = direction === "out" ? e.origin : e.dest;
     const away = direction === "out" ? e.dest : e.origin;
     if (!origins.includes(home) || away !== dest || e.cabin !== cabin) return false;
@@ -82,11 +93,12 @@ function awardLegs(origins, dest, direction, cabin, opts) {
 }
 
 // Best round trip = cheapest outbound + cheapest return that fit the
-// nights range. One-way awards book independently, so programs may differ —
-// and in "Any airport" mode the return may land at a different home airport.
+// nights range, judged on EFFECTIVE miles (transfer bonus applied).
+// One-way awards book independently, so programs may differ — and in
+// "Any airport" mode the return may land at a different home airport.
 function bestAward(origins, dest, cabin, opts) {
-  if (!DATA.awards) return null;
-  const { min, max } = DATA.config.nights;
+  if (!DATA.awards || !WIN) return null;
+  const { min, max } = WIN.nights;
   const outs = awardLegs(origins, dest, "out", cabin, opts);
   const rets = awardLegs(origins, dest, "ret", cabin, opts);
   let best = null;
@@ -94,9 +106,9 @@ function bestAward(origins, dest, cabin, opts) {
     for (const r of rets) {
       const n = nightsBetween(o.date, r.date);
       if (n < min || n > max) continue;
-      const miles = o.miles + r.miles;
-      if (!best || miles < best.miles) {
-        best = { miles, taxes: (o.taxes ?? 0) + (r.taxes ?? 0), out: o, ret: r };
+      const eff = effLegMiles(o) + effLegMiles(r);
+      if (!best || eff < best.eff) {
+        best = { miles: o.miles + r.miles, eff, taxes: (o.taxes ?? 0) + (r.taxes ?? 0), out: o, ret: r };
       }
     }
   }
@@ -171,7 +183,7 @@ function renderBanner() {
   } else {
     const when = new Date(DATA.awards?.generated || DATA.cash?.generated);
     const hrs = Math.round((Date.now() - when) / 3600000);
-    el.innerHTML = `<div class="banner ok">Prices refreshed ${hrs <= 1 ? "within the last hour" : hrs + " hours ago"} · window ${DATA.config.window.start} → ${DATA.config.window.end}</div>`;
+    el.innerHTML = `<div class="banner ok">Prices refreshed ${hrs <= 1 ? "within the last hour" : hrs + " hours ago"}</div>`;
   }
   const home = DATA.config?.home;
   if (home) {
@@ -246,6 +258,12 @@ function renderBest() {
   container.innerHTML = "";
   if (!DATA.config || (!DATA.cash && !DATA.awards)) return;
 
+  WIN = DATA.config.windows.find((w) => w.id === $("#best-window").value) || DATA.config.windows[0];
+  BONUS = $("#bonus-program").value
+    ? { program: $("#bonus-program").value, pct: Number($("#bonus-pct").value) || 0 }
+    : null;
+  localStorage.setItem("awardscout.bonus", JSON.stringify(BONUS));
+
   const currency = DATA.cash?.currency === "EUR" ? "€" : "$";
   const origins = opts.origin === "any" ? DATA.config.origins : [opts.origin];
   const rows = DATA.config.destinations
@@ -255,18 +273,23 @@ function renderBest() {
       const cash = bestCash(origins, code);
       const award = bestAward(origins, code, opts.cabin, opts);
       const delta = bestAward(origins, code, opts.cabin, { ...opts, program: "delta", allPrograms: true });
-      const value = cash && award ? ((cash.price - award.taxes) / award.miles) * 100 : null;
+      const value = cash && award ? ((cash.price - award.taxes) / award.eff) * 100 : null;
       if (!cash && !award) return null;
       return { meta, cash, award, delta, value };
     })
     .filter(Boolean);
 
   const key = {
-    miles: (r) => r.award?.miles ?? Infinity,
+    miles: (r) => r.award?.eff ?? Infinity,
     cash: (r) => r.cash?.price ?? Infinity,
     value: (r) => -(r.value ?? -Infinity),
   }[opts.sort];
   rows.sort((a, b) => key(a) - key(b));
+
+  const winLine = document.createElement("p");
+  winLine.className = "results-summary";
+  winLine.textContent = `${WIN.label}: ${WIN.start} → ${WIN.end}, ${WIN.nights.min}–${WIN.nights.max} nights`;
+  container.appendChild(winLine);
 
   const watching = watchSection(opts, origins);
   if (watching) container.appendChild(watching);
@@ -283,21 +306,23 @@ function renderBest() {
     const watched = watchlist.some((w) => w.key === watchKey(r.meta.code, opts.cabin));
     const head = `<div class="dest-head">${rank}<h3>${r.meta.city}</h3><span class="dest-code">${r.meta.code}${r.meta.country ? " · " + r.meta.country : ""}</span>${r.value != null ? `<span class="value-badge ${r.value >= 1.2 ? "good" : ""}">${r.value.toFixed(1)}¢/mi</span>` : ""}<button class="watch-btn${watched ? " on" : ""}" title="${watched ? "Stop watching" : "Watch this — compare against future prices"}" data-watch="${r.meta.code}">${watched ? "★" : "☆"}</button></div>`;
 
+    const fam = familyFactor();
     const cashLabel = DATA.cash?.mode === "anchor" ? "Cash benchmark" : "Cheapest cash";
     const cashHtml = r.cash
       ? `<div class="price-block">
            <div class="price-label">${cashLabel}</div>
            <div class="price-big">${currency}${Math.round(r.cash.price).toLocaleString()}</div>
            <div class="price-sub">from ${r.cash.origin} · ${shortDate(r.cash.dep)} → ${shortDate(r.cash.ret)} (${nightsBetween(r.cash.dep, r.cash.ret)}n) · per person</div>
+           <div class="price-sub fam-line">👨‍👩‍👧 ≈ ${currency}${Math.round(r.cash.price * fam).toLocaleString()} for ${familyLabel()}</div>
            <a class="link-btn" target="_blank" rel="noopener" href="${gfLink(r.cash.origin, r.meta.code, { dep: r.cash.dep, ret: r.cash.ret }, { nonstop: false, cabin: opts.cabin === "business" ? "business class" : "economy" })}">Verify on Google Flights</a>
          </div>`
       : `<div class="price-block muted-block"><div class="price-label">${cashLabel}</div><div class="price-sub">no data for this route</div></div>`;
 
-    const awardHtml = r.award ? awardBlock("Best with your points", r.award, opts) : `<div class="price-block muted-block"><div class="price-label">Best with your points</div><div class="price-sub">no award space found</div></div>`;
+    const awardHtml = r.award ? awardBlock("Best with your points", r.award, opts, r.cash?.price) : `<div class="price-block muted-block"><div class="price-label">Best with your points</div><div class="price-sub">no award space found</div></div>`;
 
     const deltaHtml =
       r.delta && (!r.award || r.delta.miles !== r.award.miles || r.delta.out.program !== r.award.out.program)
-        ? awardBlock("Delta SkyMiles specifically", r.delta, opts)
+        ? awardBlock("Delta SkyMiles specifically", r.delta, opts, r.cash?.price)
         : "";
 
     card.innerHTML = head + `<p class="dest-note">${r.meta.note}</p><div class="blocks">${cashHtml}${awardHtml}${deltaHtml}</div>`;
@@ -306,7 +331,16 @@ function renderBest() {
   });
 }
 
-function awardBlock(title, a, opts) {
+function familyFactor() {
+  const cfg = DATA.config;
+  return (cfg.adults ?? 2) + (cfg.lapInfant ? 0.1 : 0);
+}
+function familyLabel() {
+  const cfg = DATA.config;
+  return `${cfg.adults} adults${cfg.lapInfant ? " + lap infant" : ""}`;
+}
+
+function awardBlock(title, a, opts, cashPrice) {
   const outInfo = programInfo(a.out.program);
   const retInfo = programInfo(a.ret.program);
   const samePro = a.out.program === a.ret.program;
@@ -317,11 +351,22 @@ function awardBlock(title, a, opts) {
       return info.url ? `<a class="link-btn" target="_blank" rel="noopener" href="${info.url}">Book ${info.label}</a>` : "";
     })
     .join(" ");
+  const bonused = Math.round(a.eff) < a.miles;
+  const bigMiles = bonused
+    ? `${fmtMiles(Math.round(a.eff))} <span class="price-unit">effective</span> <span class="price-taxes">(${fmtMiles(a.miles)} − ${BONUS.pct}% bonus)</span>`
+    : `${fmtMiles(a.miles)} <span class="price-unit">miles</span>`;
+  const cfg = DATA.config;
+  const adults = cfg.adults ?? 2;
+  // Lap infant on an international award: ~10% of the adult CASH fare.
+  const infantFee = cfg.lapInfant && cashPrice ? Math.round(0.1 * cashPrice) : null;
+  const famCash = Math.round(a.taxes * adults + (infantFee ?? 0));
+  const famLine = `👨‍👩‍👧 ≈ ${fmtMiles(Math.round(a.eff) * adults)} + $${famCash}${cfg.lapInfant ? (infantFee ? ` (incl. ~$${infantFee} infant fare)` : " + ~10% of cash fare for infant") : ""} for ${familyLabel()}`;
   return `<div class="price-block">
     <div class="price-label">${title}</div>
-    <div class="price-big">${fmtMiles(a.miles)} <span class="price-unit">miles</span>${a.taxes ? ` <span class="price-taxes">+ ~$${Math.round(a.taxes)}</span>` : ""}</div>
+    <div class="price-big">${bigMiles}${a.taxes ? ` <span class="price-taxes">+ ~$${Math.round(a.taxes)}</span>` : ""}</div>
     <div class="price-sub">${programs}${outInfo.amex && samePro && a.out.program !== "delta" ? " (Amex 1:1)" : ""} · per person</div>
     <div class="price-sub">Out ${shortDate(a.out.date)} from ${a.out.origin} ${fmtMiles(a.out.miles)}${a.out.direct ? " · nonstop" : ""} → Back ${shortDate(a.ret.date)} into ${a.ret.dest} ${fmtMiles(a.ret.miles)}${a.ret.direct ? " · nonstop" : ""}</div>
+    <div class="price-sub fam-line">${famLine}</div>
     ${positioningLine(a)}
     ${links}
   </div>`;
@@ -344,9 +389,26 @@ async function initBest() {
     opt.value = opt.textContent = o;
     originSel.appendChild(opt);
   });
+  const winSel = $("#best-window");
+  (DATA.config?.windows || []).forEach((w) => {
+    const opt = document.createElement("option");
+    opt.value = w.id;
+    opt.textContent = w.label;
+    winSel.appendChild(opt);
+  });
+  // Land on the first window that actually has data rather than an empty view.
+  const hasData = (w) =>
+    (DATA.awards?.entries || []).some((e) => e.date >= w.start && e.date <= w.end) ||
+    (DATA.cash?.entries || []).some((e) => e.dep >= w.start && e.dep <= w.end);
+  const firstLive = (DATA.config?.windows || []).find(hasData);
+  if (firstLive) winSel.value = firstLive.id;
+  if (BONUS) {
+    $("#bonus-program").value = BONUS.program;
+    $("#bonus-pct").value = BONUS.pct;
+  }
   renderBanner();
   renderBest();
-  ["#best-origin", "#best-region", "#best-cabin", "#best-sort", "#best-nonstop", "#best-seats", "#best-allprograms"].forEach(
+  ["#best-window", "#best-origin", "#best-region", "#best-cabin", "#best-sort", "#best-nonstop", "#best-seats", "#best-allprograms", "#bonus-program", "#bonus-pct"].forEach(
     (sel) => $(sel).addEventListener("change", renderBest)
   );
 }

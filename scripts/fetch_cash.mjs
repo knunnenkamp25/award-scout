@@ -13,17 +13,19 @@ if (!KEY) {
 
 const cfg = JSON.parse(fs.readFileSync("data/config.json", "utf8"));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// Anchor trip: centered in the window, median length.
-const start = new Date(cfg.window.start + "T00:00:00Z");
-const end = new Date(cfg.window.end + "T00:00:00Z");
-const nights = Math.round((cfg.nights.min + cfg.nights.max) / 2);
-const mid = new Date((start.getTime() + end.getTime()) / 2);
-const dep = new Date(mid);
-dep.setUTCDate(dep.getUTCDate() - Math.ceil(nights / 2));
-const ret = new Date(dep);
-ret.setUTCDate(ret.getUTCDate() + nights);
 const iso = (d) => d.toISOString().slice(0, 10);
+
+// Anchor trip per window: centered, median length.
+function anchorFor(window) {
+  const start = new Date(window.start + "T00:00:00Z");
+  const end = new Date(window.end + "T00:00:00Z");
+  const nights = Math.round((window.nights.min + window.nights.max) / 2);
+  const dep = new Date((start.getTime() + end.getTime()) / 2);
+  dep.setUTCDate(dep.getUTCDate() - Math.ceil(nights / 2));
+  const ret = new Date(dep);
+  ret.setUTCDate(ret.getUTCDate() + nights);
+  return { dep, ret };
+}
 
 function lowestPrice(json) {
   if (json.price_insights?.lowest_price) return json.price_insights.lowest_price;
@@ -34,7 +36,9 @@ function lowestPrice(json) {
 }
 
 const entries = [];
-for (const origin of cfg.cash_origins || cfg.origins) {
+for (const window of cfg.windows) {
+  const { dep, ret } = anchorFor(window);
+  for (const origin of cfg.cash_origins || cfg.origins) {
   for (const dest of cfg.destinations) {
     const p = new URLSearchParams({
       engine: "google_flights",
@@ -66,6 +70,7 @@ for (const origin of cfg.cash_origins || cfg.origins) {
       console.log(`fetch failed for ${origin}-${dest}: ${err.message}`);
     }
     await sleep(1100);
+  }
   }
 }
 

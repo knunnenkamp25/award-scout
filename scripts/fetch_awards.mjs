@@ -24,7 +24,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let requestCount = 0;
 let rateLimited = false;
 
-async function search(origins, destinations, label) {
+async function search(origins, destinations, window, label) {
   const results = [];
   let skip = 0;
   let cursor = null;
@@ -33,8 +33,8 @@ async function search(origins, destinations, label) {
     const p = new URLSearchParams({
       origin_airport: origins.join(","),
       destination_airport: destinations.join(","),
-      start_date: cfg.window.start,
-      end_date: cfg.window.end,
+      start_date: window.start,
+      end_date: window.end,
       cabins: cfg.cabins.join(","),
       take: "1000",
     });
@@ -90,18 +90,18 @@ function toEntries(items) {
   return entries;
 }
 
-const outbound = await search(cfg.origins, cfg.destinations, "outbound");
-const inbound = await search(cfg.destinations, cfg.origins, "inbound");
-let positioning = [];
-if (cfg.home) {
-  // Domestic hops between home and the hub origins, for positioning math.
-  const hubs = cfg.origins.filter((o) => o !== cfg.home);
-  positioning = [
-    ...(await search([cfg.home], hubs, "positioning-out")),
-    ...(await search(hubs, [cfg.home], "positioning-back")),
-  ];
+const raw = [];
+for (const window of cfg.windows) {
+  raw.push(...(await search(cfg.origins, cfg.destinations, window, `${window.id} outbound`)));
+  raw.push(...(await search(cfg.destinations, cfg.origins, window, `${window.id} inbound`)));
+  if (cfg.home) {
+    // Domestic hops between home and the hub origins, for positioning math.
+    const hubs = cfg.origins.filter((o) => o !== cfg.home);
+    raw.push(...(await search([cfg.home], hubs, window, `${window.id} positioning-out`)));
+    raw.push(...(await search(hubs, [cfg.home], window, `${window.id} positioning-back`)));
+  }
 }
-const entries = toEntries(outbound).concat(toEntries(inbound), toEntries(positioning));
+const entries = toEntries(raw);
 
 if (entries.length === 0) {
   // Never overwrite good data with an empty fetch (e.g. a fully

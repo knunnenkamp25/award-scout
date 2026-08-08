@@ -230,6 +230,10 @@ td.cpm-bad { color: var(--danger); }
 .price-unit { font-size: .85rem; font-weight: 600; color: var(--muted); }
 .price-taxes { font-size: .85rem; font-weight: 500; color: var(--muted); }
 .price-sub { font-size: .8rem; color: var(--muted); }
+.fam-line { color: var(--text); font-weight: 500; }
+.bonus-inline select, .bonus-inline input { padding: .25rem .4rem; font-size: .85rem; }
+.health-line { margin: 0 0 .2rem; font-size: .75rem; }
+.health-line a { color: var(--muted); }
 
 /* ---- watchlist ---- */
 .watch-btn {

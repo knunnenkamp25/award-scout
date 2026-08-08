@@ -51,44 +51,82 @@ async function initTrends() {
     }
   } catch { /* no file yet */ }
 
+  lines = lines.filter((l) => l.windows); // per-window format only
   if (lines.length < 10) {
     const since = lines[0] ? new Date(lines[0].ts).toLocaleDateString() : "the next real data refresh";
     el.innerHTML = `<div class="card"><p class="hint">📈 Collecting: <strong>${lines.length}</strong> snapshot${lines.length === 1 ? "" : "s"} so far (recording started ${lines[0] ? since : "with " + since}). Trends unlock at 10+ snapshots — about a week of the twice-daily refresh — and get sharper for months after that.</p></div>`;
     return;
   }
 
-  // Per destination: now vs the observed range of economy award prices.
-  const dests = [...new Set(lines.flatMap((l) => Object.keys(l.dests)))];
   const latest = lines[lines.length - 1];
-  const rows = dests
-    .map((code) => {
-      const series = lines.map((l) => l.dests[code]?.e?.m).filter(Boolean);
-      if (!series.length) return null;
-      const sorted = [...series].sort((a, b) => a - b);
-      const min = sorted[0];
-      const median = sorted[Math.floor(sorted.length / 2)];
-      const now = latest.dests[code]?.e?.m ?? null;
-      const verdict = now == null ? "—" : now <= min ? "🔥 all-time low" : now <= median ? "below typical" : "above typical";
-      const meta = destByCode(code);
-      return { code, city: meta?.city || code, min, median, now, verdict, samples: series.length };
-    })
-    .filter(Boolean)
-    .sort((a, b) => (a.now ?? Infinity) - (b.now ?? Infinity));
-
-  const table = `
-    <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>Destination</th><th>Now (econ)</th><th>Lowest seen</th><th>Typical</th><th>Read</th></tr></thead>
-      <tbody>${rows
-        .map(
-          (r) => `<tr><td>${r.city} <span class="dest-code">${r.code}</span></td>
-            <td>${r.now ? fmtMiles(r.now) : "—"}</td><td>${fmtMiles(r.min)}</td><td>${fmtMiles(r.median)}</td>
-            <td>${r.verdict}</td></tr>`
-        )
-        .join("")}</tbody>
-    </table></div>
-    <p class="hint">${lines.length} snapshots since ${new Date(lines[0].ts).toLocaleDateString()}. "Typical" is the median observed best price.</p></div>`;
-  el.innerHTML = table;
+  let html = "";
+  for (const w of DATA.config?.windows || []) {
+    const dests = [...new Set(lines.flatMap((l) => Object.keys(l.windows[w.id] || {})))];
+    const rows = dests
+      .map((code) => {
+        const series = lines.map((l) => l.windows[w.id]?.[code]?.e?.m).filter(Boolean);
+        if (!series.length) return null;
+        const sorted = [...series].sort((a, b) => a - b);
+        const min = sorted[0];
+        const median = sorted[Math.floor(sorted.length / 2)];
+        const now = latest.windows[w.id]?.[code]?.e?.m ?? null;
+        const verdict = now == null ? "—" : now <= min ? "🔥 all-time low" : now <= median ? "below typical" : "above typical";
+        const meta = destByCode(code);
+        return { code, city: meta?.city || code, min, median, now, verdict };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.now ?? Infinity) - (b.now ?? Infinity));
+    if (!rows.length) continue;
+    html += `
+      <div class="card"><h3 style="margin-top:0">${w.label}</h3><div class="table-wrap"><table>
+        <thead><tr><th>Destination</th><th>Now (econ)</th><th>Lowest seen</th><th>Typical</th><th>Read</th></tr></thead>
+        <tbody>${rows
+          .map(
+            (r) => `<tr><td>${r.city} <span class="dest-code">${r.code}</span></td>
+              <td>${r.now ? fmtMiles(r.now) : "—"}</td><td>${fmtMiles(r.min)}</td><td>${fmtMiles(r.median)}</td>
+              <td>${r.verdict}</td></tr>`
+          )
+          .join("")}</tbody>
+      </table></div></div>`;
+  }
+  el.innerHTML =
+    (html || '<div class="card"><p class="hint">No trend rows yet for the configured windows.</p></div>') +
+    `<p class="hint" style="padding:0 .5rem">${lines.length} snapshots since ${new Date(lines[0].ts).toLocaleDateString()}. "Typical" is the median observed best price.</p>`;
 }
+
+/* ---------- data health footer ---------- */
+async function initHealth() {
+  const el = $("#health-line");
+  if (!el) return;
+  const age = (iso) => {
+    const h = (Date.now() - new Date(iso)) / 3600000;
+    return h < 1 ? "<1h" : h < 48 ? Math.round(h) + "h" : Math.round(h / 24) + "d";
+  };
+  const parts = [];
+  const [awards, cash] = await Promise.all([loadJson("data/awards.json"), loadJson("data/cash.json")]);
+  if (awards) parts.push(`awards ${awards.sample ? "⚠️ sample" : age(awards.generated) + " old"}`);
+  if (cash) parts.push(`cash ${cash.sample ? "⚠️ sample" : age(cash.generated) + " old"}`);
+  try {
+    const onPages = location.hostname.endsWith("github.io");
+    const owner = onPages ? location.hostname.split(".")[0] : "knunnenkamp25";
+    const repo = onPages ? location.pathname.split("/")[1] || "award-scout" : "award-scout";
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs?per_page=10`);
+    if (res.ok) {
+      const runs = (await res.json()).workflow_runs || [];
+      const latestBy = {};
+      for (const r of runs) if (!latestBy[r.name]) latestBy[r.name] = r;
+      for (const [name, short] of [["Refresh price data", "award run"], ["Refresh cash benchmarks", "cash run"]]) {
+        const r = latestBy[name];
+        if (r) {
+          const mark = r.conclusion === "success" ? "✓" : r.status === "completed" ? "✗" : "…";
+          parts.push(`<a href="${r.html_url}" target="_blank" rel="noopener">last ${short} ${mark}</a>`);
+        }
+      }
+    }
+  } catch { /* offline or rate-limited — ages alone are fine */ }
+  el.innerHTML = parts.join(" · ");
+}
+initHealth();
 
 initDeals();
 initTrends();
