@@ -26,6 +26,12 @@ function programInfo(id) {
 
 const DATA = { config: null, cash: null, awards: null };
 
+// Ground alternatives from home for positioning (shown when no award hop fits).
+const TRAIN_FROM_HOME = {
+  DCA: "Amtrak ~2.5h", BWI: "Amtrak ~3h", IAD: "Amtrak+metro ~3.5h",
+  PHL: "Amtrak ~4h", EWR: "Amtrak ~5.5h", JFK: "Amtrak to NYC ~6h",
+};
+
 async function loadJson(path) {
   try {
     const res = await fetch(path + "?t=" + Date.now());
@@ -97,6 +103,47 @@ function bestAward(origins, dest, cabin, opts) {
   return best;
 }
 
+// Cheapest economy award hop between home and a hub, on the leg date or with
+// a one-day overnight buffer on the correct side.
+function positioningHop(hub, legDate, dir) {
+  const home = DATA.config?.home;
+  if (!DATA.awards || !home || hub === home) return null;
+  let best = null;
+  for (const e of DATA.awards.entries) {
+    if (e.cabin !== "economy") continue;
+    if (dir === "out" ? e.origin !== home || e.dest !== hub : e.origin !== hub || e.dest !== home) continue;
+    const offset = nightsBetween(legDate, e.date); // e.date - legDate in days
+    if (dir === "out" ? offset < -1 || offset > 0 : offset < 0 || offset > 1) continue;
+    if (!best || e.miles < best.miles) best = e;
+  }
+  return best;
+}
+
+function positioningLine(a) {
+  const home = DATA.config?.home;
+  if (!home) return "";
+  const parts = [];
+  let extraMiles = 0;
+  let allAward = true;
+  for (const [leg, hub, date, dir] of [
+    ["out", a.out.origin, a.out.date, "out"],
+    ["back", a.ret.dest, a.ret.date, "ret"],
+  ]) {
+    if (hub === home) continue;
+    const hop = positioningHop(hub, date, dir);
+    if (hop) {
+      extraMiles += hop.miles;
+      parts.push(`${leg}: +${fmtMiles(hop.miles)} ${dir === "out" ? home + "→" + hub : hub + "→" + home} ${shortDate(hop.date)}`);
+    } else {
+      allAward = false;
+      parts.push(`${leg}: ${TRAIN_FROM_HOME[hub] || "short cash flight"} to ${dir === "out" ? hub : home}`);
+    }
+  }
+  if (!parts.length) return ""; // already starts and ends at home
+  const total = allAward && extraMiles ? ` · ≈ ${fmtMiles(a.miles + extraMiles)} total from ${home}` : "";
+  return `<div class="price-sub pos-line">🏠 ${parts.join(" · ")}${total}</div>`;
+}
+
 /* ---------- rendering ---------- */
 function bestControls() {
   return {
@@ -120,11 +167,15 @@ function renderBanner() {
   }
   if (isSample) {
     el.innerHTML =
-      '<div class="banner warn"><strong>⚠️ Sample data</strong> — these are made-up numbers so you can try the interface. Add your seats.aero and Amadeus API keys as repo secrets and run the "Refresh price data" action to get real prices.</div>';
+      `<div class="banner warn"><strong>⚠️ ${DATA.awards?.sample ? "Award prices are sample data" : "Some prices are sample data"}</strong> — the next successful "Refresh price data" run replaces them with real seats.aero availability.</div>`;
   } else {
     const when = new Date(DATA.awards?.generated || DATA.cash?.generated);
     const hrs = Math.round((Date.now() - when) / 3600000);
     el.innerHTML = `<div class="banner ok">Prices refreshed ${hrs <= 1 ? "within the last hour" : hrs + " hours ago"} · window ${DATA.config.window.start} → ${DATA.config.window.end}</div>`;
+  }
+  const home = DATA.config?.home;
+  if (home) {
+    el.innerHTML += `<div class="banner tip">🏠 Booking from ${home}: before paying for a positioning hop, search the winning program <em>from ${home}</em> — award tickets usually include the domestic connector on one protected ticket for little or no extra miles. The "🏠" line on each card is the fallback plan.</div>`;
   }
 }
 
@@ -205,6 +256,7 @@ function awardBlock(title, a, opts) {
     <div class="price-big">${fmtMiles(a.miles)} <span class="price-unit">miles</span>${a.taxes ? ` <span class="price-taxes">+ ~$${Math.round(a.taxes)}</span>` : ""}</div>
     <div class="price-sub">${programs}${outInfo.amex && samePro && a.out.program !== "delta" ? " (Amex 1:1)" : ""} · per person</div>
     <div class="price-sub">Out ${shortDate(a.out.date)} from ${a.out.origin} ${fmtMiles(a.out.miles)}${a.out.direct ? " · nonstop" : ""} → Back ${shortDate(a.ret.date)} into ${a.ret.dest} ${fmtMiles(a.ret.miles)}${a.ret.direct ? " · nonstop" : ""}</div>
+    ${positioningLine(a)}
     ${links}
   </div>`;
 }

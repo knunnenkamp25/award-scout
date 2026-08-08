@@ -92,7 +92,16 @@ function toEntries(items) {
 
 const outbound = await search(cfg.origins, cfg.destinations, "outbound");
 const inbound = await search(cfg.destinations, cfg.origins, "inbound");
-const entries = toEntries(outbound).concat(toEntries(inbound));
+let positioning = [];
+if (cfg.home) {
+  // Domestic hops between home and the hub origins, for positioning math.
+  const hubs = cfg.origins.filter((o) => o !== cfg.home);
+  positioning = [
+    ...(await search([cfg.home], hubs, "positioning-out")),
+    ...(await search(hubs, [cfg.home], "positioning-back")),
+  ];
+}
+const entries = toEntries(outbound).concat(toEntries(inbound), toEntries(positioning));
 
 if (entries.length === 0) {
   // Never overwrite good data with an empty fetch (e.g. a fully

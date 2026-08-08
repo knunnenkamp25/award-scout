@@ -181,6 +181,8 @@ td.cpm-bad { color: var(--danger); }
 }
 .banner.warn { background: color-mix(in srgb, #f5a623 12%, var(--surface)); border-color: #f5a623; }
 .banner.ok { background: var(--surface); color: var(--muted); }
+.banner.tip { background: var(--accent-soft); border-color: var(--accent); font-size: .82rem; }
+.pos-line { border-top: 1px dashed var(--line); padding-top: .3rem; margin-top: .1rem; width: 100%; }
 .controls-card { padding: .8rem 1rem; }
 .controls-row {
   display: grid;
