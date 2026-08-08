@@ -1,10 +1,11 @@
 name: Refresh cash benchmarks
 
 # Cash benchmarks move slowly and only feed the cents-per-mile math, so a
-# twice-monthly refresh keeps SerpAPI's free plan (100 searches/mo) ample.
+# monthly refresh (cash_origins × destinations calls) stays inside
+# SerpAPI's free plan (100 searches/mo) with room for manual runs.
 on:
   schedule:
-    - cron: "23 6 1,15 * *"
+    - cron: "23 6 1 * *"
   workflow_dispatch:
 
 permissions:

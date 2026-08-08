@@ -48,12 +48,13 @@ function fmtMiles(n) {
 }
 
 /* ---------- per-destination computation ---------- */
-function bestCash(origin, dest) {
+// `origins` is a list: pass all home airports for "Any airport" mode.
+function bestCash(origins, dest) {
   if (!DATA.cash) return null;
   const { min, max } = DATA.config.nights;
   let best = null;
   for (const e of DATA.cash.entries) {
-    if (e.origin !== origin || e.dest !== dest || !e.price) continue;
+    if (!origins.includes(e.origin) || e.dest !== dest || !e.price) continue;
     const n = nightsBetween(e.dep, e.ret);
     if (n < min || n > max) continue;
     if (!best || e.price < best.price) best = e;
@@ -61,9 +62,11 @@ function bestCash(origin, dest) {
   return best;
 }
 
-function awardLegs(a, b, cabin, opts) {
+function awardLegs(origins, dest, direction, cabin, opts) {
   return DATA.awards.entries.filter((e) => {
-    if (e.origin !== a || e.dest !== b || e.cabin !== cabin) return false;
+    const home = direction === "out" ? e.origin : e.dest;
+    const away = direction === "out" ? e.dest : e.origin;
+    if (!origins.includes(home) || away !== dest || e.cabin !== cabin) return false;
     if (opts.nonstop && !e.direct) return false;
     if (opts.seatsNeeded && e.seats > 0 && e.seats < opts.seatsNeeded) return false;
     if (!opts.allPrograms && !programInfo(e.program).amex) return false;
@@ -73,12 +76,13 @@ function awardLegs(a, b, cabin, opts) {
 }
 
 // Best round trip = cheapest outbound + cheapest return that fit the
-// nights range. One-way awards book independently, so programs may differ.
-function bestAward(origin, dest, cabin, opts) {
+// nights range. One-way awards book independently, so programs may differ —
+// and in "Any airport" mode the return may land at a different home airport.
+function bestAward(origins, dest, cabin, opts) {
   if (!DATA.awards) return null;
   const { min, max } = DATA.config.nights;
-  const outs = awardLegs(origin, dest, cabin, opts);
-  const rets = awardLegs(dest, origin, cabin, opts);
+  const outs = awardLegs(origins, dest, "out", cabin, opts);
+  const rets = awardLegs(origins, dest, "ret", cabin, opts);
   let best = null;
   for (const o of outs) {
     for (const r of rets) {
@@ -131,13 +135,14 @@ function renderBest() {
   if (!DATA.config || (!DATA.cash && !DATA.awards)) return;
 
   const currency = DATA.cash?.currency === "EUR" ? "€" : "$";
+  const origins = opts.origin === "any" ? DATA.config.origins : [opts.origin];
   const rows = DATA.config.destinations
     .map((code) => {
       const meta = destByCode(code) || { code, city: code, country: "", region: "Custom", note: "" };
       if (opts.region !== "all" && meta.region !== opts.region) return null;
-      const cash = bestCash(opts.origin, code);
-      const award = bestAward(opts.origin, code, opts.cabin, opts);
-      const delta = bestAward(opts.origin, code, opts.cabin, { ...opts, program: "delta", allPrograms: true });
+      const cash = bestCash(origins, code);
+      const award = bestAward(origins, code, opts.cabin, opts);
+      const delta = bestAward(origins, code, opts.cabin, { ...opts, program: "delta", allPrograms: true });
       const value = cash && award ? ((cash.price - award.taxes) / award.miles) * 100 : null;
       if (!cash && !award) return null;
       return { meta, cash, award, delta, value };
@@ -167,8 +172,8 @@ function renderBest() {
       ? `<div class="price-block">
            <div class="price-label">${cashLabel}</div>
            <div class="price-big">${currency}${Math.round(r.cash.price).toLocaleString()}</div>
-           <div class="price-sub">${shortDate(r.cash.dep)} → ${shortDate(r.cash.ret)} (${nightsBetween(r.cash.dep, r.cash.ret)}n) · per person</div>
-           <a class="link-btn" target="_blank" rel="noopener" href="${gfLink(opts.origin, r.meta.code, { dep: r.cash.dep, ret: r.cash.ret }, { nonstop: false, cabin: opts.cabin === "business" ? "business class" : "economy" })}">Verify on Google Flights</a>
+           <div class="price-sub">from ${r.cash.origin} · ${shortDate(r.cash.dep)} → ${shortDate(r.cash.ret)} (${nightsBetween(r.cash.dep, r.cash.ret)}n) · per person</div>
+           <a class="link-btn" target="_blank" rel="noopener" href="${gfLink(r.cash.origin, r.meta.code, { dep: r.cash.dep, ret: r.cash.ret }, { nonstop: false, cabin: opts.cabin === "business" ? "business class" : "economy" })}">Verify on Google Flights</a>
          </div>`
       : `<div class="price-block muted-block"><div class="price-label">${cashLabel}</div><div class="price-sub">no data for this route</div></div>`;
 
@@ -199,7 +204,7 @@ function awardBlock(title, a, opts) {
     <div class="price-label">${title}</div>
     <div class="price-big">${fmtMiles(a.miles)} <span class="price-unit">miles</span>${a.taxes ? ` <span class="price-taxes">+ ~$${Math.round(a.taxes)}</span>` : ""}</div>
     <div class="price-sub">${programs}${outInfo.amex && samePro && a.out.program !== "delta" ? " (Amex 1:1)" : ""} · per person</div>
-    <div class="price-sub">Out ${shortDate(a.out.date)} ${fmtMiles(a.out.miles)}${a.out.direct ? " · nonstop" : ""} → Back ${shortDate(a.ret.date)} ${fmtMiles(a.ret.miles)}${a.ret.direct ? " · nonstop" : ""}</div>
+    <div class="price-sub">Out ${shortDate(a.out.date)} from ${a.out.origin} ${fmtMiles(a.out.miles)}${a.out.direct ? " · nonstop" : ""} → Back ${shortDate(a.ret.date)} into ${a.ret.dest} ${fmtMiles(a.ret.miles)}${a.ret.direct ? " · nonstop" : ""}</div>
     ${links}
   </div>`;
 }
@@ -212,6 +217,10 @@ async function initBest() {
     loadJson("data/awards.json"),
   ]);
   const originSel = $("#best-origin");
+  const any = document.createElement("option");
+  any.value = "any";
+  any.textContent = "Any airport";
+  originSel.appendChild(any);
   (DATA.config?.origins || ["JFK"]).forEach((o) => {
     const opt = document.createElement("option");
     opt.value = opt.textContent = o;

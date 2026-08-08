@@ -34,7 +34,7 @@ function lowestPrice(json) {
 }
 
 const entries = [];
-for (const origin of cfg.origins) {
+for (const origin of cfg.cash_origins || cfg.origins) {
   for (const dest of cfg.destinations) {
     const p = new URLSearchParams({
       engine: "google_flights",

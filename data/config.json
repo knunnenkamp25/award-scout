@@ -1,5 +1,6 @@
 {
-  "origins": ["JFK"],
+  "origins": ["RIC", "DCA", "IAD", "BWI", "PHL", "JFK", "EWR", "BOS", "ATL"],
+  "cash_origins": ["RIC", "JFK"],
   "window": { "start": "2026-12-13", "end": "2027-01-05" },
   "nights": { "min": 6, "max": 9 },
   "cabins": ["economy", "business"],
