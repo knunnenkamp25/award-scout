@@ -6,7 +6,13 @@
 <meta name="description" content="Award Scout — turn vague trip ideas into a fan-out of flight searches across cash and miles programs.">
 <title>Award Scout</title>
 <link rel="stylesheet" href="css/style.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🧭</text></svg>">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#1d4ed8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Award Scout">
 </head>
 <body>
 <header class="topbar">
@@ -251,5 +257,8 @@
 <script src="js/app.js"></script>
 <script src="js/results.js"></script>
 <script src="js/feeds.js"></script>
+<script>
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+</script>
 </body>
 </html>
