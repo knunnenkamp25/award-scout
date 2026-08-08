@@ -13,6 +13,8 @@
   <h1>🧭 Award Scout</h1>
   <nav class="tabs" role="tablist">
     <button class="tab active" data-tab="best" role="tab">Best Options</button>
+    <button class="tab" data-tab="deals" role="tab">Deals</button>
+    <button class="tab" data-tab="trends" role="tab">Trends</button>
     <button class="tab" data-tab="search" role="tab">Manual Search</button>
     <button class="tab" data-tab="log" role="tab">Trip Log</button>
     <button class="tab" data-tab="cheatsheet" role="tab">Cheat Sheet</button>
@@ -61,6 +63,24 @@
     </div>
   </div>
   <div id="best-results"></div>
+</section>
+
+<!-- ============ DEALS TAB ============ -->
+<section id="tab-deals" class="tab-panel">
+  <div class="card">
+    <h2>Deal radar</h2>
+    <p class="hint">Recent headlines from the points blogs that break Delta flash sales and transfer bonuses first, filtered to your programs and airports. Links open the source article. Refreshes with the price data.</p>
+  </div>
+  <div id="deals-list"></div>
+</section>
+
+<!-- ============ TRENDS TAB ============ -->
+<section id="tab-trends" class="tab-panel">
+  <div class="card">
+    <h2>Price history</h2>
+    <p class="hint">Every data refresh records the day's best prices. Over weeks this reveals the real pattern — which dates, airlines, and programs are consistently cheap from your airports.</p>
+  </div>
+  <div id="trends-content"></div>
 </section>
 
 <!-- ============ SEARCH TAB ============ -->
@@ -214,5 +234,6 @@
 <script src="js/destinations.js"></script>
 <script src="js/app.js"></script>
 <script src="js/results.js"></script>
+<script src="js/feeds.js"></script>
 </body>
 </html>

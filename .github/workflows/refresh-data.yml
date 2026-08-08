@@ -26,7 +26,16 @@ jobs:
           SEATS_AERO_API_KEY: ${{ secrets.SEATS_AERO_API_KEY }}
         run: node scripts/fetch_awards.mjs
 
+      - name: Fetch deal headlines (RSS)
+        if: always()
+        run: node scripts/fetch_deals.mjs
+
+      - name: Record price history
+        if: always()
+        run: node scripts/append_history.mjs
+
       - name: Commit updated data
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

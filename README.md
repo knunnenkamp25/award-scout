@@ -7,6 +7,9 @@ You give it a vague idea — *"about a week in Europe, around Christmas, 2 adult
 
 ## What it does
 
+- **Best Options** — ranked destinations by real award and cash prices across your whole flexible window, with from-home positioning math. Star (⭐) any option to **watch it**: the app remembers the price you saw and shows the change every time data refreshes.
+- **Deals** — a twice-daily radar over eight points blogs' RSS feeds (Frequent Miler, LoyaltyLobby, One Mile at a Time, Danny the Deal Guru, AwardWallet News, Thrifty Traveler, View from the Wing, Miles to Memories), filtered to actionable award sales for the programs this household holds, with a lighter program-news tier below. Headlines link to the source.
+- **Trends** — every refresh appends the day's best prices to `data/history.ndjson`. After ~10 snapshots the tab starts showing now-vs-typical-vs-lowest per destination; months of data reveal the real pattern of when to fly and book.
 - **Search fan-out** — pick origins, a target date ± flexibility, a trip-length range, cabin, passengers, and destinations (curated Europe/Caribbean lists with award-program notes, or add any airport). One click per destination opens a pre-filled search; an expander gives you every individual date pair if you want the full grid.
 - **Trip log** — record what each search found (cash price, miles, taxes), and it computes cents-per-mile so you can see instantly whether an award beats paying cash. Exports CSV. Everything stays in your browser (localStorage) — no accounts, no server.
 - **Cheat sheet** — which Amex transfer partner to check for which route, infant-on-award rules, and the one-stop hub trick.

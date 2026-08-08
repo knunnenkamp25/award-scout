@@ -179,6 +179,67 @@ function renderBanner() {
   }
 }
 
+/* ---------- watchlist ---------- */
+const LS_WATCH = "awardscout.watch";
+let watchlist = JSON.parse(localStorage.getItem(LS_WATCH) || "[]");
+
+function watchKey(dest, cabin) {
+  return dest + "|" + cabin;
+}
+function toggleWatch(dest, cabin, current) {
+  const key = watchKey(dest, cabin);
+  const i = watchlist.findIndex((w) => w.key === key);
+  if (i >= 0) watchlist.splice(i, 1);
+  else
+    watchlist.push({
+      key, dest, cabin,
+      miles: current.award?.miles ?? null,
+      taxes: current.award ? Math.round(current.award.taxes) : null,
+      cash: current.cash ? Math.round(current.cash.price) : null,
+      program: current.award?.out.program ?? null,
+      when: new Date().toISOString(),
+    });
+  localStorage.setItem(LS_WATCH, JSON.stringify(watchlist));
+  renderBest();
+}
+
+function watchSection(opts, origins) {
+  if (!watchlist.length) return null;
+  const wrap = document.createElement("div");
+  wrap.className = "card watch-card";
+  let html = '<div class="price-label">⭐ Watching</div>';
+  for (const w of watchlist) {
+    const award = bestAward(origins, w.dest, w.cabin, { ...opts, nonstop: false });
+    const cash = bestCash(origins, w.dest);
+    const meta = destByCode(w.dest);
+    const milesNow = award?.miles ?? null;
+    const cashNow = cash ? Math.round(cash.price) : null;
+    const diff = (now, then, unit) => {
+      if (now == null || then == null) return "";
+      const d = now - then;
+      if (!d) return ' <span class="delta-flat">unchanged</span>';
+      const cls = d < 0 ? "delta-down" : "delta-up";
+      const val = unit === "mi" ? fmtMiles(Math.abs(d)) : "$" + Math.abs(d);
+      return ` <span class="${cls}">${d < 0 ? "▼" : "▲"}${val}</span>`;
+    };
+    html += `<div class="watch-row">
+      <strong>${meta?.city || w.dest}</strong> <span class="dest-code">${w.cabin}</span> ·
+      saved ${w.miles ? fmtMiles(w.miles) + " mi" : ""}${w.cash ? " / $" + w.cash : ""} (${new Date(w.when).toLocaleDateString()}) →
+      now ${milesNow ? fmtMiles(milesNow) + " mi" : "no award space"}${diff(milesNow, w.miles, "mi")}${cashNow ? " / $" + cashNow : ""}${diff(cashNow, w.cash, "$")}
+      <button class="del-btn" title="Stop watching" data-unwatch="${w.key}">✕</button>
+    </div>`;
+  }
+  wrap.innerHTML = html;
+  wrap.querySelectorAll("[data-unwatch]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      watchlist = watchlist.filter((w) => w.key !== btn.dataset.unwatch);
+      localStorage.setItem(LS_WATCH, JSON.stringify(watchlist));
+      renderBest();
+    })
+  );
+  return wrap;
+}
+
 function renderBest() {
   const opts = bestControls();
   const container = $("#best-results");
@@ -207,8 +268,11 @@ function renderBest() {
   }[opts.sort];
   rows.sort((a, b) => key(a) - key(b));
 
+  const watching = watchSection(opts, origins);
+  if (watching) container.appendChild(watching);
+
   if (!rows.length) {
-    container.innerHTML = '<p class="results-summary">Nothing matches these filters — try relaxing nonstop/seats, or another region.</p>';
+    container.innerHTML += '<p class="results-summary">Nothing matches these filters — try relaxing nonstop/seats, or another region.</p>';
     return;
   }
 
@@ -216,7 +280,8 @@ function renderBest() {
     const card = document.createElement("div");
     card.className = "card best-card";
     const rank = `<span class="rank">#${i + 1}</span>`;
-    const head = `<div class="dest-head">${rank}<h3>${r.meta.city}</h3><span class="dest-code">${r.meta.code}${r.meta.country ? " · " + r.meta.country : ""}</span>${r.value != null ? `<span class="value-badge ${r.value >= 1.2 ? "good" : ""}">${r.value.toFixed(1)}¢/mi</span>` : ""}</div>`;
+    const watched = watchlist.some((w) => w.key === watchKey(r.meta.code, opts.cabin));
+    const head = `<div class="dest-head">${rank}<h3>${r.meta.city}</h3><span class="dest-code">${r.meta.code}${r.meta.country ? " · " + r.meta.country : ""}</span>${r.value != null ? `<span class="value-badge ${r.value >= 1.2 ? "good" : ""}">${r.value.toFixed(1)}¢/mi</span>` : ""}<button class="watch-btn${watched ? " on" : ""}" title="${watched ? "Stop watching" : "Watch this — compare against future prices"}" data-watch="${r.meta.code}">${watched ? "★" : "☆"}</button></div>`;
 
     const cashLabel = DATA.cash?.mode === "anchor" ? "Cash benchmark" : "Cheapest cash";
     const cashHtml = r.cash
@@ -236,6 +301,7 @@ function renderBest() {
         : "";
 
     card.innerHTML = head + `<p class="dest-note">${r.meta.note}</p><div class="blocks">${cashHtml}${awardHtml}${deltaHtml}</div>`;
+    card.querySelector("[data-watch]").addEventListener("click", () => toggleWatch(r.meta.code, opts.cabin, r));
     container.appendChild(card);
   });
 }

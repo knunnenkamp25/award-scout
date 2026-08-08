@@ -231,6 +231,32 @@ td.cpm-bad { color: var(--danger); }
 .price-taxes { font-size: .85rem; font-weight: 500; color: var(--muted); }
 .price-sub { font-size: .8rem; color: var(--muted); }
 
+/* ---- watchlist ---- */
+.watch-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 1.25rem; line-height: 1; color: var(--muted); padding: 0 .2rem;
+}
+.watch-btn.on { color: #f5a623; }
+.watch-card { border-color: #f5a623; }
+.watch-row { font-size: .88rem; padding: .35rem 0; border-bottom: 1px solid var(--line); }
+.watch-row:last-child { border-bottom: none; }
+.delta-down { color: var(--good); font-weight: 700; }
+.delta-up { color: var(--danger); font-weight: 700; }
+.delta-flat { color: var(--muted); }
+
+/* ---- deals ---- */
+.deal-row { padding: .55rem 0; border-bottom: 1px solid var(--line); }
+.deal-row:last-child { border-bottom: none; }
+.deal-meta { font-size: .75rem; color: var(--muted); }
+.deal-source { font-weight: 700; }
+.deal-title { display: block; font-size: .95rem; text-decoration: none; color: var(--text); margin: .15rem 0; }
+.deal-title:hover { color: var(--accent); }
+.deal-tags { display: flex; flex-wrap: wrap; gap: .3rem; }
+.deal-tag {
+  font-size: .7rem; padding: .1rem .45rem; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+}
+
 #toast {
   position: fixed;
   left: 50%;
