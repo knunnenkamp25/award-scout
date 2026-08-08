@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Award Scout — turn vague trip ideas into a fan-out of flight searches across cash and miles programs.">
+<title>Award Scout</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🧭</text></svg>">
+</head>
+<body>
+<header class="topbar">
+  <h1>🧭 Award Scout</h1>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="search" role="tab">Search</button>
+    <button class="tab" data-tab="log" role="tab">Trip Log</button>
+    <button class="tab" data-tab="cheatsheet" role="tab">Cheat Sheet</button>
+  </nav>
+</header>
+
+<main>
+<!-- ============ SEARCH TAB ============ -->
+<section id="tab-search" class="tab-panel active">
+  <form id="search-form" class="card form-card" autocomplete="off">
+    <div class="form-grid">
+      <label class="field">
+        <span class="field-label">Home airport(s)</span>
+        <input type="text" id="origins" placeholder="e.g. JFK, EWR" required
+               pattern="[A-Za-z]{3}(\s*,\s*[A-Za-z]{3})*"
+               title="Comma-separated 3-letter airport codes">
+        <span class="hint">Comma-separated codes</span>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Travel around</span>
+        <input type="date" id="around-date" required>
+        <span class="hint">Center of your window</span>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Flexibility</span>
+        <select id="flex-days">
+          <option value="0">Exact date</option>
+          <option value="3">± 3 days</option>
+          <option value="7" selected>± 1 week</option>
+          <option value="14">± 2 weeks</option>
+          <option value="21">± 3 weeks</option>
+        </select>
+      </label>
+
+      <div class="field">
+        <span class="field-label">Trip length (nights)</span>
+        <div class="range-pair">
+          <input type="number" id="min-nights" min="1" max="30" value="6" aria-label="Minimum nights">
+          <span>to</span>
+          <input type="number" id="max-nights" min="1" max="60" value="9" aria-label="Maximum nights">
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Passengers</span>
+        <div class="range-pair">
+          <input type="number" id="adults" min="1" max="8" value="2" aria-label="Adults">
+          <span>adults</span>
+          <label class="check-inline"><input type="checkbox" id="infant" checked> + lap infant</label>
+        </div>
+      </div>
+
+      <label class="field">
+        <span class="field-label">Cabin</span>
+        <select id="cabin">
+          <option value="economy" selected>Economy</option>
+          <option value="premium economy">Premium Economy</option>
+          <option value="business class">Business (Delta One)</option>
+        </select>
+      </label>
+
+      <label class="field check-field">
+        <input type="checkbox" id="nonstop">
+        <span>Prefer nonstop (never more than 1 stop anyway)</span>
+      </label>
+    </div>
+
+    <fieldset class="dest-fieldset">
+      <legend>Where to? <span class="hint">Tap to toggle — or add your own</span></legend>
+      <div class="region-row" id="region-buttons"></div>
+      <div class="chip-grid" id="dest-chips"></div>
+      <div class="add-dest-row">
+        <input type="text" id="custom-dest" placeholder="Add airport code (e.g. NAP)" pattern="[A-Za-z]{3}" maxlength="3">
+        <button type="button" id="add-dest-btn" class="btn btn-ghost">+ Add</button>
+      </div>
+    </fieldset>
+
+    <button type="submit" class="btn btn-primary btn-big">Generate my searches</button>
+  </form>
+
+  <div id="results"></div>
+</section>
+
+<!-- ============ TRIP LOG TAB ============ -->
+<section id="tab-log" class="tab-panel">
+  <div class="card">
+    <h2>Trip Log</h2>
+    <p class="hint">Record what you find in each search so you can compare. Value = (cash − taxes) ÷ miles. Anything above ~1.2¢/mile beats Delta's baseline.</p>
+    <form id="log-form" class="log-form">
+      <input type="text" id="log-route" placeholder="Route (JFK→MXP)" required>
+      <input type="text" id="log-dates" placeholder="Dates (12/19–12/27)" required>
+      <input type="number" id="log-cash" placeholder="Cash $ total" min="0" step="1">
+      <input type="number" id="log-miles" placeholder="Miles (per person)" min="0" step="1000">
+      <input type="number" id="log-taxes" placeholder="Taxes $ (award)" min="0" step="1">
+      <select id="log-program">
+        <option>Delta SkyMiles</option>
+        <option>Flying Blue (Amex 1:1)</option>
+        <option>Virgin Atlantic (Amex 1:1)</option>
+        <option>Aeroplan (Amex 1:1)</option>
+        <option>Avios (Amex 1:1)</option>
+        <option>Cash / other</option>
+      </select>
+      <input type="text" id="log-notes" placeholder="Notes (cabin, stops…)">
+      <button type="submit" class="btn btn-primary">Add</button>
+    </form>
+    <div class="table-wrap">
+      <table id="log-table">
+        <thead>
+          <tr><th>Route</th><th>Dates</th><th>Cash</th><th>Miles</th><th>Taxes</th><th>¢/mile</th><th>Program</th><th>Notes</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="log-actions">
+      <button id="export-csv" class="btn btn-ghost">Export CSV</button>
+      <button id="clear-log" class="btn btn-danger-ghost">Clear all</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CHEAT SHEET TAB ============ -->
+<section id="tab-cheatsheet" class="tab-panel">
+  <div class="card prose">
+    <h2>Your Points, Decoded</h2>
+    <p>You hold <strong>Delta SkyMiles</strong> and <strong>Amex Membership Rewards</strong>. Amex transfers 1:1 to Delta <em>and</em> to several partners that often price the <strong>same flights for fewer miles</strong>. Always check these before booking with SkyMiles directly:</p>
+    <table class="cheat-table">
+      <thead><tr><th>Program</th><th>Transfer</th><th>Why it matters for Europe</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Flying Blue</strong> (Air France/KLM)</td><td>Amex 1:1</td><td>SkyTeam like Delta — books Delta, AF & KLM flights, often far cheaper than SkyMiles for the same seat. Monthly "Promo Rewards" discount specific routes 25–50%.</td></tr>
+        <tr><td><strong>Virgin Atlantic</strong></td><td>Amex 1:1</td><td>Can book <em>Delta-operated</em> flights, sometimes at a fraction of Delta's own price — the classic Delta One sweet spot.</td></tr>
+        <tr><td><strong>Aeroplan</strong> (Air Canada)</td><td>Amex 1:1</td><td>Star Alliance: Lufthansa, Swiss, Austrian, TAP, SAS — great for Christmas-market cities (Munich, Vienna, Zurich). Allows a stopover for 5k miles.</td></tr>
+        <tr><td><strong>British Airways / Iberia Avios</strong></td><td>Amex 1:1</td><td>Iberia to Madrid and Aer Lingus to Dublin are cheap in Avios with low surcharges. Avoid BA through London (high fees).</td></tr>
+        <tr><td><strong>Delta SkyMiles</strong></td><td>Amex 1:1 (you also earn these directly)</td><td>No award chart — pricing floats with cash price. Best deals appear in flash sales and on off-peak dates; the calendar view on delta.com is your friend.</td></tr>
+      </tbody>
+    </table>
+    <h3>Rules of thumb</h3>
+    <ul>
+      <li><strong>Never transfer Amex speculatively.</strong> Find the award space first, confirm the price, then transfer (usually instant to all of the above).</li>
+      <li><strong>Price the same seat 3 ways:</strong> Delta miles, Flying Blue, Virgin Atlantic. It's routinely a 2–3× spread.</li>
+      <li><strong>Lap infant on international awards:</strong> Delta charges 10% of the adult <em>cash</em> fare in dollars; some partners charge 10% in miles. Award tickets with a lap infant often must be ticketed by phone — book the adults online, then call.</li>
+      <li><strong>One-stop trick:</strong> the expensive part is crossing the Atlantic. If Sardinia (or anywhere secondary) is pricey, book the great transatlantic deal to a hub (Milan, Paris, Amsterdam) and buy the short hop separately — overnight near the hub if the connection is tight.</li>
+      <li><strong>December pattern:</strong> Dec 24–26 and Jan 1–4 departures are frequently the cheapest of the entire month; Dec 19–22 outbound is peak.</li>
+    </ul>
+    <h3>Phase 2 (planned)</h3>
+    <p>A scheduled GitHub Action will pull live award availability from the seats.aero API into this site, so the best mile prices appear here directly instead of via links out. The layout above is built to receive it.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <p>Award Scout · static site, no tracking, data stays in your browser · <a href="https://github.com/" id="repo-link">source</a></p>
+</footer>
+
+<script src="js/destinations.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
