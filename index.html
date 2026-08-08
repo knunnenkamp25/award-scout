@@ -12,15 +12,59 @@
 <header class="topbar">
   <h1>🧭 Award Scout</h1>
   <nav class="tabs" role="tablist">
-    <button class="tab active" data-tab="search" role="tab">Search</button>
+    <button class="tab active" data-tab="best" role="tab">Best Options</button>
+    <button class="tab" data-tab="search" role="tab">Manual Search</button>
     <button class="tab" data-tab="log" role="tab">Trip Log</button>
     <button class="tab" data-tab="cheatsheet" role="tab">Cheat Sheet</button>
   </nav>
 </header>
 
 <main>
+<!-- ============ BEST OPTIONS TAB ============ -->
+<section id="tab-best" class="tab-panel active">
+  <div id="data-banner"></div>
+  <div class="card controls-card">
+    <div class="controls-row">
+      <label class="field">
+        <span class="field-label">From</span>
+        <select id="best-origin"></select>
+      </label>
+      <label class="field">
+        <span class="field-label">Region</span>
+        <select id="best-region">
+          <option value="all">Everywhere</option>
+          <option value="Europe" selected>Europe</option>
+          <option value="Caribbean/Mexico">Caribbean/Mexico</option>
+          <option value="Farther afield">Farther afield</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Cabin</span>
+        <select id="best-cabin">
+          <option value="economy" selected>Economy</option>
+          <option value="business">Business</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Rank by</span>
+        <select id="best-sort">
+          <option value="miles" selected>Fewest miles</option>
+          <option value="cash">Cheapest cash</option>
+          <option value="value">Best ¢/mile value</option>
+        </select>
+      </label>
+    </div>
+    <div class="controls-row checks">
+      <label class="check-inline"><input type="checkbox" id="best-nonstop"> Nonstop award only</label>
+      <label class="check-inline"><input type="checkbox" id="best-seats" checked> Seats for whole family</label>
+      <label class="check-inline"><input type="checkbox" id="best-allprograms"> Include non-Amex programs</label>
+    </div>
+  </div>
+  <div id="best-results"></div>
+</section>
+
 <!-- ============ SEARCH TAB ============ -->
-<section id="tab-search" class="tab-panel active">
+<section id="tab-search" class="tab-panel">
   <form id="search-form" class="card form-card" autocomplete="off">
     <div class="form-grid">
       <label class="field">
@@ -169,5 +213,6 @@
 
 <script src="js/destinations.js"></script>
 <script src="js/app.js"></script>
+<script src="js/results.js"></script>
 </body>
 </html>

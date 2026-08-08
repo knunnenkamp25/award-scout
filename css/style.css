@@ -171,6 +171,64 @@ td.cpm-bad { color: var(--danger); }
 .cheat-table td, .cheat-table th { white-space: normal; }
 .prose li { margin-bottom: .5rem; }
 
+/* ---- best options ---- */
+.banner {
+  border-radius: var(--radius);
+  padding: .7rem 1rem;
+  font-size: .88rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--line);
+}
+.banner.warn { background: color-mix(in srgb, #f5a623 12%, var(--surface)); border-color: #f5a623; }
+.banner.ok { background: var(--surface); color: var(--muted); }
+.controls-card { padding: .8rem 1rem; }
+.controls-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: .6rem .8rem;
+}
+.controls-row.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem 1.2rem;
+  margin-top: .7rem;
+}
+.best-card { padding: .9rem 1rem; }
+.rank { color: var(--muted); font-weight: 700; font-size: .95rem; }
+.value-badge {
+  margin-left: auto;
+  font-size: .8rem;
+  font-weight: 700;
+  padding: .15rem .5rem;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.value-badge.good { color: var(--good); border-color: var(--good); }
+.blocks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: .8rem;
+  margin-top: .6rem;
+}
+.price-block {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: .6rem .8rem;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  align-items: flex-start;
+}
+.muted-block { opacity: .6; }
+.price-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; }
+.price-big { font-size: 1.45rem; font-weight: 700; line-height: 1.1; }
+.price-unit { font-size: .85rem; font-weight: 600; color: var(--muted); }
+.price-taxes { font-size: .85rem; font-weight: 500; color: var(--muted); }
+.price-sub { font-size: .8rem; color: var(--muted); }
+
 #toast {
   position: fixed;
   left: 50%;

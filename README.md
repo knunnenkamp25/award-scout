@@ -13,17 +13,22 @@ You give it a vague idea — *"about a week in Europe, around Christmas, 2 adult
 
 ## Architecture
 
-Pure static site — `index.html` + vanilla JS/CSS, no build step, no dependencies. Works on phone and desktop.
+Pure static site — `index.html` + vanilla JS/CSS, no build step, no dependencies. Works on phone and desktop. A scheduled GitHub Action ([refresh-data.yml](.github/workflows/refresh-data.yml)) pulls prices into `data/*.json` twice a day; the **Best Options** tab reads those snapshots and ranks destinations by real miles and dollars. No server needed at any point.
 
-### Phase 2 (planned): live award data
+`data/config.json` controls what gets fetched: origins, destinations, the date window, trip length, and cabins. Edit it and push — the workflow re-runs automatically.
 
-The plan is to layer real award availability on top via the [seats.aero Pro API](https://docs.seats.aero/article/68-seatsaero-pro-api-access-limits-and-usage):
+### Setup: connecting real data
 
-1. A **GitHub Actions workflow** on a cron schedule calls the API with a key stored as a **repo secret** (safe in a public repo).
-2. It writes JSON snapshots of availability for the configured regions into `data/`.
-3. The frontend reads those snapshots and shows best-by-miles results directly, sorted and filtered, instead of only linking out.
+The repo ships with clearly-labeled **sample data** so the UI works out of the box. To get real prices, add API credentials as **repository secrets** (Settings → Secrets and variables → Actions → New repository secret — secrets stay private even in a public repo):
 
-No server needed at any point.
+| Secret name | Where to get it | Cost | Powers |
+|---|---|---|---|
+| `SEATS_AERO_API_KEY` | [seats.aero Pro](https://seats.aero/pro) → account settings → API | $9.99/mo | Award availability & miles pricing across Delta, Flying Blue, Virgin Atlantic, Aeroplan, Avios, and more |
+| `AMADEUS_CLIENT_ID` + `AMADEUS_CLIENT_SECRET` | [developers.amadeus.com](https://developers.amadeus.com) → free account → create an app | Free | Cheapest cash round-trip per route/date window |
+
+Either feed works alone. After adding secrets, run the workflow once by hand: Actions tab → "Refresh price data" → Run workflow. The Amadeus **test sandbox** (default) has limited route coverage; once comfortable, create a production key set and set a repository *variable* `AMADEUS_ENV` = `production`.
+
+The award fetcher uses the [seats.aero Partner API](https://developers.seats.aero/) (personal, non-commercial use per their terms). Round trips are computed as best outbound + best return one-way awards, which may come from two different programs — that's real bookability, since one-way awards book independently.
 
 ## Notes
 
