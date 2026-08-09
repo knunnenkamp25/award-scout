@@ -560,9 +560,19 @@ function renderBest() {
         delta = delta || bestAward(DATA.config.origins, code, opts.cabin, { ...opts, program: "delta", allPrograms: true });
         viaHub = !!award;
       }
+      // No Delta round trip? Surface the cheapest bookable one-way leg.
+      let deltaOneWay = null;
+      if (!delta) {
+        const dOpts = { ...opts, program: "delta", allPrograms: true };
+        for (const dir of ["out", "ret"]) {
+          for (const leg of awardLegs(origins, code, dir, opts.cabin, dOpts)) {
+            if (!deltaOneWay || effLegMiles(leg) < effLegMiles(deltaOneWay)) deltaOneWay = { ...leg, legDir: dir };
+          }
+        }
+      }
       const value = cash && award ? ((cash.price - award.taxes) / award.eff) * 100 : null;
       if (!cash && !award) return null;
-      return { meta, cash, award, delta, value, viaHub };
+      return { meta, cash, award, delta, deltaOneWay, value, viaHub };
     })
     .filter(Boolean);
 
@@ -630,10 +640,20 @@ function renderBest() {
       ? awardBlock(r.viaHub ? "Best with your points · via hub" : "Best with your points", r.award, opts, r.cash?.price)
       : `<div class="price-block muted-block"><div class="price-label">Best with your points</div><div class="price-sub">no award space found</div></div>`;
 
-    const deltaHtml =
-      r.delta && (!r.award || r.delta.miles !== r.award.miles || r.delta.out.program !== r.award.out.program)
-        ? awardBlock("Delta SkyMiles specifically", r.delta, opts, r.cash?.price)
-        : "";
+    let deltaHtml = "";
+    if (r.delta && (!r.award || r.delta.miles !== r.award.miles || r.delta.out.program !== r.award.out.program)) {
+      deltaHtml = awardBlock("Delta SkyMiles specifically", r.delta, opts, r.cash?.price);
+    } else if (!r.delta && r.deltaOneWay) {
+      // No Delta round trip pairs (classic for Delta One: eastbound space
+      // exists, westbound rarely does) — show the bookable half honestly.
+      const o = r.deltaOneWay;
+      deltaHtml = `<div class="price-block">
+        <div class="price-label">Delta SkyMiles · ${o.legDir === "out" ? "outbound only" : "return only"}</div>
+        <div class="price-big">${fmtMiles(o.miles)} <span class="price-unit">miles one-way</span>${o.taxes ? ` <span class="price-taxes">+ ~$${Math.round(taxesUsd(o))}</span>` : ""}</div>
+        <div class="price-sub">${shortDate(o.date)} ${o.origin}→${o.dest}${o.direct ? " · nonstop" : ""} · per person</div>
+        <div class="price-sub">No Delta space cached the other way — pair with the best-points ${o.legDir === "out" ? "return" : "outbound"} above (one-way awards book separately).</div>
+      </div>`;
+    }
 
     card.innerHTML = head + `<p class="dest-note">${r.meta.note}</p><div class="blocks">${cashHtml}${awardHtml}${deltaHtml}</div>`;
     card.querySelector("[data-watch]").addEventListener("click", () => toggleWatch(r.meta.code, opts.cabin, r));
