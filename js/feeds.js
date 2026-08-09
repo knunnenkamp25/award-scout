@@ -40,6 +40,74 @@ async function initDeals() {
   list.appendChild(card);
 }
 
+/* ---------- hidden gems (weekly discovery sweep) ---------- */
+async function initGems() {
+  const list = $("#gems-list");
+  if (!list) return;
+  let gems = null;
+  try {
+    const res = await fetch("data/gems.json?t=" + Date.now());
+    if (res.ok) gems = await res.json();
+  } catch { /* not swept yet */ }
+  if (!gems?.entries?.length) {
+    list.innerHTML =
+      '<div class="card"><div class="price-label">💎 Hidden gems</div><p class="hint">The weekly discovery sweep (Sundays) scans <em>everything</em> the key programs fly from North America and lists cheap awards to places the tracker doesn\'t follow. Nothing yet — first sweep pending.</p></div>';
+    return;
+  }
+  const CAB = { economy: "Econ", premium: "Prem", business: "Biz" };
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML =
+    `<div class="price-label">💎 Hidden gems — cheap awards to places we don't track</div>
+    <p class="hint">From the weekly all-routes sweep (${timeAgo(gems.generated)}). "Track" adds one to the destination list — the next refresh prices it fully.</p>` +
+    gems.entries
+      .slice(0, 30)
+      .map(
+        (g) => `<div class="deal-row gem-row">
+          <span class="gem-main"><strong>${g.dest}</strong> · ${fmtMiles(g.miles)} ${CAB[g.cabin] || g.cabin} one-way</span>
+          <span class="deal-meta">${programInfo(g.program).label} from ${g.origin} · ${g.date}${g.direct ? " · nonstop" : ""}${g.days > 1 ? ` · ${g.days} days like this` : ""}</span>
+          <button class="btn btn-ghost gem-track" data-track="${g.dest}">＋ Track</button>
+        </div>`
+      )
+      .join("");
+  list.appendChild(card);
+  card.querySelectorAll("[data-track]").forEach((btn) =>
+    btn.addEventListener("click", () => trackDestination(btn.dataset.track, btn))
+  );
+}
+
+async function trackDestination(code, btn) {
+  const token = localStorage.getItem(LS_GH);
+  if (!token) return needToken(() => trackDestination(code, btn));
+  const { owner, repo } = repoInfo();
+  btn.disabled = true;
+  btn.textContent = "Adding…";
+  try {
+    const api = `https://api.github.com/repos/${owner}/${repo}/contents/data/config.json`;
+    const headers = { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" };
+    const cur = await (await fetch(api, { headers })).json();
+    if (!cur.content) throw new Error(cur.message || "could not read config");
+    const cfg = JSON.parse(atob(cur.content.replace(/\n/g, "")));
+    if (!cfg.destinations.includes(code)) cfg.destinations.push(code);
+    const res = await fetch(api, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        message: `App: track ${code}`,
+        content: btoa(JSON.stringify(cfg, null, 2) + "\n"),
+        sha: cur.sha,
+      }),
+    });
+    if (!res.ok) throw new Error("commit failed (HTTP " + res.status + ")");
+    btn.textContent = "✓ Tracking";
+    toast(`${code} added — the refresh is fetching it now (~3–5 min).`);
+  } catch (err) {
+    toast("Couldn't add: " + err.message);
+    btn.disabled = false;
+    btn.textContent = "＋ Track";
+  }
+}
+
 async function initTrends() {
   const el = $("#trends-content");
   let lines = [];
@@ -128,5 +196,6 @@ async function initHealth() {
 }
 initHealth();
 
+initGems();
 initDeals();
 initTrends();

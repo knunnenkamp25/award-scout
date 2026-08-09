@@ -1,0 +1,44 @@
+name: Discovery sweep (hidden gems)
+
+# Weekly bulk sweep of everything the key programs have from North America,
+# surfacing cheap awards to untracked destinations. Weekly because bulk
+# pulls are big — it gets its own budget away from the twice-daily refresh.
+on:
+  schedule:
+    - cron: "41 7 * * 0" # Sundays
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-gems
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Bulk availability sweep (seats.aero)
+        env:
+          SEATS_AERO_API_KEY: ${{ secrets.SEATS_AERO_API_KEY }}
+        run: node scripts/fetch_gems.mjs
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "No data changes."
+          else
+            git commit -m "Discovery sweep [skip ci]"
+            git pull --rebase origin main
+            git push
+          fi
