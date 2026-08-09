@@ -246,9 +246,94 @@ function dateGridHtml(dest, opts, origins) {
   return html;
 }
 
+/* ---------- flight builder (hand-pick one leg each way) ---------- */
+const CAB_SHORT = { economy: "Econ", premium: "Prem Select", business: "Biz", first: "First" };
+
+function builderLegs(dest, dir, opts, origins) {
+  const legs = [];
+  for (const cabin of ["economy", "premium", "business"]) {
+    legs.push(...awardLegs(origins, dest, dir, cabin, opts));
+  }
+  legs.sort((a, b) => effLegMiles(a) - effLegMiles(b));
+  return legs.slice(0, 40);
+}
+
+function legRowHtml(leg, dir, dest, idx) {
+  const info = programInfo(leg.program);
+  const eff = Math.round(effLegMiles(leg));
+  const bonused = eff < leg.miles;
+  return `<label class="leg-row">
+    <input type="radio" name="b${dir}-${dest}" value="${idx}">
+    <span class="leg-main"><strong>${fmtMiles(eff)}</strong>${bonused ? `<s class="leg-raw">${fmtMiles(leg.miles)}</s>` : ""} · ${shortDate(leg.date)} ${leg.origin}→${leg.dest}</span>
+    <span class="leg-meta">${CAB_SHORT[leg.cabin]} · ${info.label}${leg.direct ? " · nonstop" : ""}${leg.seats ? ` · ${leg.seats}+ seats` : ""}${leg.taxes ? ` · ~$${Math.round(taxesUsd(leg))}` : ""}</span>
+  </label>`;
+}
+
+function builderHtml(dest, opts, origins) {
+  const outs = builderLegs(dest, "out", opts, origins);
+  const rets = builderLegs(dest, "ret", opts, origins);
+  if (!outs.length && !rets.length) return { html: '<p class="hint">No award legs match the current filters.</p>', outs, rets };
+  const col = (title, legs, dir) =>
+    `<div class="builder-col"><div class="cal-title">${title}</div><div class="leg-list">${
+      legs.length ? legs.map((l, i) => legRowHtml(l, dir, dest, i)).join("") : '<p class="hint">no legs</p>'
+    }</div></div>`;
+  const html =
+    `<p class="hint">Mix cabins and programs freely — one-way awards book separately. Delta One out + Premium Select back is the classic play.</p>` +
+    `<div class="builder-cols">${col("Outbound", outs, "out")}${col("Return", rets, "ret")}</div>` +
+    `<div class="builder-summary" data-dest="${dest}">Pick one leg in each column.</div>`;
+  return { html, outs, rets };
+}
+
+function updateBuilderSummary(det, dest) {
+  const sum = det.querySelector(".builder-summary");
+  const oIdx = det.querySelector(`input[name="bout-${dest}"]:checked`)?.value;
+  const rIdx = det.querySelector(`input[name="bret-${dest}"]:checked`)?.value;
+  const o = oIdx != null ? det._legs.outs[oIdx] : null;
+  const r = rIdx != null ? det._legs.rets[rIdx] : null;
+  if (!o || !r) {
+    sum.innerHTML = o
+      ? `Outbound picked (${fmtMiles(Math.round(effLegMiles(o)))} ${CAB_SHORT[o.cabin]}) — now pick a return.`
+      : r
+      ? `Return picked (${fmtMiles(Math.round(effLegMiles(r)))} ${CAB_SHORT[r.cabin]}) — now pick an outbound.`
+      : "Pick one leg in each column.";
+    return;
+  }
+  const nights = nightsBetween(o.date, r.date);
+  const eff = Math.round(effLegMiles(o) + effLegMiles(r));
+  const taxes = Math.round(taxesUsd(o) + taxesUsd(r));
+  const cfg = DATA.config;
+  const adults = cfg.adults ?? 2;
+  const famMiles = eff * adults;
+  const famTaxes = taxes * adults;
+  const warn = nights < 0 ? ' <strong style="color:var(--danger)">⚠️ return is before the outbound!</strong>' : "";
+  const links = [
+    ...[...new Set([o.program, r.program])].map((p) => {
+      const info = programInfo(p);
+      return info.url ? `<a class="link-btn" target="_blank" rel="noopener" href="${info.url}">Book ${info.label}</a>` : "";
+    }),
+    `<a class="link-btn" target="_blank" rel="noopener" href="https://seats.aero/search?origin=${o.origin}&destination=${o.dest}&date=${o.date}">⚡ Check out-leg</a>`,
+    `<a class="link-btn" target="_blank" rel="noopener" href="https://seats.aero/search?origin=${r.origin}&destination=${r.dest}&date=${r.date}">⚡ Check back-leg</a>`,
+    `<button class="btn btn-ghost" data-buildlog="1">＋ Trip Log</button>`,
+  ].join(" ");
+  sum.innerHTML = `<div class="price-big">${fmtMiles(eff)} <span class="price-unit">+ ~$${taxes} per person</span></div>
+    <div class="price-sub">${shortDate(o.date)} ${CAB_SHORT[o.cabin]} (${programInfo(o.program).label}) → ${shortDate(r.date)} ${CAB_SHORT[r.cabin]} (${programInfo(r.program).label}) · ${nights} nights${warn}</div>
+    <div class="price-sub fam-line">👨‍👩‍👧 ≈ ${fmtMiles(famMiles)} + $${famTaxes}${cfg.lapInfant ? " + infant fare" : ""} for ${familyLabel()}</div>
+    <div class="link-row">${links}</div>`;
+  sum.querySelector("[data-buildlog]").addEventListener("click", () => {
+    $("#log-route").value = `${o.origin}→${dest}→${r.dest}`;
+    $("#log-dates").value = `${shortDate(o.date)}–${shortDate(r.date)}`;
+    $("#log-miles").value = eff;
+    $("#log-taxes").value = taxes;
+    $("#log-notes").value = `${CAB_SHORT[o.cabin]} out (${programInfo(o.program).label}) / ${CAB_SHORT[r.cabin]} back (${programInfo(r.program).label})`;
+    $$(".tab").find((t) => t.dataset.tab === "log").click();
+    $("#log-cash").focus();
+  });
+}
+
 /* ---------- book-now-vs-wait (history percentile) ---------- */
 function trendBadge(code, cabin, currentMiles) {
   if (!DATA.history || !WIN || currentMiles == null) return "";
+  if (cabin !== "economy" && cabin !== "business") return ""; // history tracks e/b only
   // History is recorded per fetch window — use the one overlapping the view.
   const histWin = (DATA.config?.windows || []).find((w) => !(WIN.end < w.start || WIN.start > w.end));
   if (!histWin) return "";
@@ -632,7 +717,7 @@ function renderBest() {
            <div class="price-big">${currency}${Math.round(r.cash.price).toLocaleString()}</div>
            <div class="price-sub">from ${r.cash.origin} · ${shortDate(r.cash.dep)} → ${shortDate(r.cash.ret)} (${nightsBetween(r.cash.dep, r.cash.ret)}n) · per person</div>
            <div class="price-sub fam-line">👨‍👩‍👧 ≈ ${currency}${Math.round(r.cash.price * fam).toLocaleString()} for ${familyLabel()}</div>
-           <a class="link-btn" target="_blank" rel="noopener" href="${gfLink(r.cash.origin, r.meta.code, { dep: r.cash.dep, ret: r.cash.ret }, { nonstop: false, cabin: opts.cabin === "business" ? "business class" : "economy" })}">Verify on Google Flights</a>
+           <a class="link-btn" target="_blank" rel="noopener" href="${gfLink(r.cash.origin, r.meta.code, { dep: r.cash.dep, ret: r.cash.ret }, { nonstop: false, cabin: { business: "business class", premium: "premium economy" }[opts.cabin] || "economy" })}">Verify on Google Flights</a>
          </div>`
       : `<div class="price-block muted-block"><div class="price-label">${cashLabel}</div><div class="price-sub">no data for this route</div></div>`;
 
@@ -658,8 +743,8 @@ function renderBest() {
     card.innerHTML = head + `<p class="dest-note">${r.meta.note}</p><div class="blocks">${cashHtml}${awardHtml}${deltaHtml}</div>`;
     card.querySelector("[data-watch]").addEventListener("click", () => toggleWatch(r.meta.code, opts.cabin, r));
 
-    // Date grid renders lazily on first expand — 21 cards × 2 calendars is
-    // too much DOM to build up front.
+    // Date grid + flight builder render lazily on first expand — 21 cards
+    // of either is too much DOM to build up front.
     if (DATA.awards) {
       const det = document.createElement("details");
       det.className = "date-grid";
@@ -671,6 +756,22 @@ function renderBest() {
         }
       });
       card.appendChild(det);
+
+      const bld = document.createElement("details");
+      bld.className = "date-grid builder";
+      bld.innerHTML = `<summary>🛠 Build a trip — pick each leg yourself</summary><div class="grid-slot"></div>`;
+      bld.addEventListener("toggle", () => {
+        if (bld.open && !bld.dataset.built) {
+          const { html, outs, rets } = builderHtml(r.meta.code, opts, origins);
+          bld.querySelector(".grid-slot").innerHTML = html;
+          bld._legs = { outs, rets };
+          bld.dataset.built = "1";
+          bld.querySelectorAll('input[type="radio"]').forEach((inp) =>
+            inp.addEventListener("change", () => updateBuilderSummary(bld, r.meta.code))
+          );
+        }
+      });
+      card.appendChild(bld);
     }
     container.appendChild(card);
   });

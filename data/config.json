@@ -7,7 +7,7 @@
     { "id": "xmas2026", "label": "Christmas–New Year '26", "start": "2026-12-13", "end": "2027-01-05", "nights": { "min": 6, "max": 9 } },
     { "id": "spring2027", "label": "Spring (Mar–Apr '27)", "start": "2027-03-26", "end": "2027-04-27", "nights": { "min": 6, "max": 9 } }
   ],
-  "cabins": ["economy", "business"],
+  "cabins": ["economy", "premium", "business"],
   "adults": 2,
   "lapInfant": true,
   "destinations": [
