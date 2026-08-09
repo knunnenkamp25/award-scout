@@ -299,6 +299,88 @@ function applyHash() {
   if (p.get("bp")) { $("#bonus-program").value = p.get("bp"); $("#bonus-pct").value = p.get("bx") || "30"; }
 }
 
+/* ---------- fetch-on-demand (commit a custom window via GitHub API) ---------- */
+const LS_GH = "awardscout.ghtoken";
+
+function repoInfo() {
+  const onPages = location.hostname.endsWith("github.io");
+  return {
+    owner: onPages ? location.hostname.split(".")[0] : "knunnenkamp25",
+    repo: onPages ? location.pathname.split("/")[1] || "award-scout" : "award-scout",
+  };
+}
+
+async function fetchDatesNow(btn) {
+  const token = localStorage.getItem(LS_GH);
+  if (!token) {
+    $("#gh-connect").classList.add("show");
+    return;
+  }
+  const { owner, repo } = repoInfo();
+  btn.disabled = true;
+  btn.textContent = "Requesting…";
+  try {
+    const api = `https://api.github.com/repos/${owner}/${repo}/contents/data/config.json`;
+    const headers = { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" };
+    const cur = await (await fetch(api, { headers })).json();
+    if (!cur.content) throw new Error(cur.message || "could not read config (token permissions?)");
+    const cfg = JSON.parse(atob(cur.content.replace(/\n/g, "")));
+    // One rotating "custom" slot so ad-hoc fetches never pile up windows
+    // (each window costs seats.aero API budget on every refresh).
+    const custom = {
+      id: "custom",
+      label: `Custom (${WIN.start} to ${WIN.depEnd})`,
+      start: WIN.start,
+      end: WIN.end,
+      nights: { min: WIN.nights.min, max: WIN.nights.max },
+    };
+    cfg.windows = cfg.windows.filter((w) => w.id !== "custom").concat([custom]);
+    const put = await fetch(api, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        message: `App: fetch custom window ${WIN.start} to ${WIN.depEnd}`,
+        content: btoa(JSON.stringify(cfg, null, 2) + "\n"),
+        sha: cur.sha,
+      }),
+    });
+    if (!put.ok) throw new Error("commit failed (HTTP " + put.status + ")");
+    toast("Window added — the fetch workflow is starting. ~3–5 minutes.");
+    btn.textContent = "Fetching… (~3–5 min)";
+    pollForFreshData(btn, Date.now());
+  } catch (err) {
+    toast("Couldn't start the fetch: " + err.message);
+    btn.disabled = false;
+    btn.textContent = "📡 Fetch these dates now";
+  }
+}
+
+function pollForFreshData(btn, startedAt) {
+  const { owner, repo } = repoInfo();
+  const timer = setInterval(async () => {
+    if (Date.now() - startedAt > 12 * 60000) {
+      clearInterval(timer);
+      toast("Taking longer than expected — check the repo's Actions tab.");
+      return;
+    }
+    try {
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs?event=push&per_page=1`);
+      const r = (await res.json()).workflow_runs?.[0];
+      if (r && new Date(r.created_at).getTime() > startedAt - 120000 && r.status === "completed") {
+        clearInterval(timer);
+        if (r.conclusion === "success") {
+          toast("Fresh prices are in — reloading.");
+          setTimeout(() => location.reload(), 1200);
+        } else {
+          toast("The fetch run failed — see the Actions tab for the log.");
+          btn.disabled = false;
+          btn.textContent = "📡 Fetch these dates now";
+        }
+      }
+    } catch { /* transient network error — keep polling */ }
+  }, 20000);
+}
+
 /* ---------- rendering ---------- */
 function bestControls() {
   return {
@@ -436,11 +518,20 @@ function renderBest() {
       const meta = destByCode(code) || { code, city: code, country: "", region: "Custom", note: "" };
       if (opts.region !== "all" && meta.region !== opts.region) return null;
       const cash = bestCash(origins, code);
-      const award = bestAward(origins, code, opts.cabin, opts);
-      const delta = bestAward(origins, code, opts.cabin, { ...opts, program: "delta", allPrograms: true });
+      let award = bestAward(origins, code, opts.cabin, opts);
+      let delta = bestAward(origins, code, opts.cabin, { ...opts, program: "delta", allPrograms: true });
+      // seats.aero's cache is gateway-centric: home-airport itineraries are
+      // sparse. When home is selected and has no direct award, fall back to
+      // the hub network — the 🏠 positioning line supplies the from-home math.
+      let viaHub = false;
+      if (!award && origins.length === 1 && origins[0] === DATA.config.home) {
+        award = bestAward(DATA.config.origins, code, opts.cabin, opts);
+        delta = delta || bestAward(DATA.config.origins, code, opts.cabin, { ...opts, program: "delta", allPrograms: true });
+        viaHub = !!award;
+      }
       const value = cash && award ? ((cash.price - award.taxes) / award.eff) * 100 : null;
       if (!cash && !award) return null;
-      return { meta, cash, award, delta, value };
+      return { meta, cash, award, delta, value, viaHub };
     })
     .filter(Boolean);
 
@@ -458,14 +549,39 @@ function renderBest() {
 
   // Honest empty state: distinguish "nothing fetched for these dates" from
   // "filters too strict".
+  // Coverage is judged on the DEPARTURE band — a range whose tail merely
+  // grazes a fetched window would otherwise claim coverage while every
+  // outbound date is actually unfetched.
   const covered =
-    (DATA.awards?.entries || []).some((e) => e.date >= WIN.start && e.date <= WIN.end) ||
-    (DATA.cash?.entries || []).some((e) => e.dep >= WIN.start && e.dep <= WIN.end);
+    (DATA.awards?.entries || []).some((e) => e.date >= WIN.start && e.date <= WIN.depEnd) ||
+    (DATA.cash?.entries || []).some((e) => e.dep >= WIN.start && e.dep <= WIN.depEnd);
   if (!covered) {
     const fetched = (DATA.config.windows || [])
       .map((w) => `${w.label} (${w.start} → ${w.end})`)
       .join(" · ");
-    container.innerHTML += `<div class="card"><p class="hint">📭 No price data has been fetched for these dates yet. The nightly refresh currently covers: <strong>${fetched}</strong>. Pick dates inside one of those (the "Jump to" buttons above), or add a window to <code>data/config.json</code> and push — the fetcher picks it up automatically.</p></div>`;
+    const hasToken = !!localStorage.getItem(LS_GH);
+    container.innerHTML += `<div class="card">
+      <p class="hint">📭 No price data has been fetched for these dates yet. The refresh currently covers: <strong>${fetched}</strong>.</p>
+      <button class="btn btn-primary" id="fetch-now">📡 Fetch these dates now</button>
+      <div id="gh-connect" class="gh-connect${hasToken ? "" : ""}">
+        <p class="hint">One-time setup: this button works by committing the new date window to your repo, which auto-triggers the fetch workflow. It needs a GitHub token that <strong>stays in this browser only</strong>.</p>
+        <ol class="hint gh-steps">
+          <li>github.com → Settings → Developer settings → <strong>Fine-grained tokens</strong> → Generate new token</li>
+          <li>Repository access: <strong>only award-scout</strong> · Permissions: <strong>Contents → Read and write</strong></li>
+          <li>Paste it here:</li>
+        </ol>
+        <div class="add-dest-row"><input type="password" id="gh-token-input" placeholder="github_pat_…"><button class="btn btn-ghost" id="gh-token-save">Save</button></div>
+      </div>
+    </div>`;
+    $("#fetch-now").addEventListener("click", () => fetchDatesNow($("#fetch-now")));
+    $("#gh-token-save")?.addEventListener("click", () => {
+      const v = $("#gh-token-input").value.trim();
+      if (!v) return;
+      localStorage.setItem(LS_GH, v);
+      $("#gh-connect").classList.remove("show");
+      toast("Connected — starting the fetch.");
+      fetchDatesNow($("#fetch-now"));
+    });
     syncHash();
     return;
   }
@@ -497,7 +613,9 @@ function renderBest() {
          </div>`
       : `<div class="price-block muted-block"><div class="price-label">${cashLabel}</div><div class="price-sub">no data for this route</div></div>`;
 
-    const awardHtml = r.award ? awardBlock("Best with your points", r.award, opts, r.cash?.price) : `<div class="price-block muted-block"><div class="price-label">Best with your points</div><div class="price-sub">no award space found</div></div>`;
+    const awardHtml = r.award
+      ? awardBlock(r.viaHub ? "Best with your points · via hub" : "Best with your points", r.award, opts, r.cash?.price)
+      : `<div class="price-block muted-block"><div class="price-label">Best with your points</div><div class="price-sub">no award space found</div></div>`;
 
     const deltaHtml =
       r.delta && (!r.award || r.delta.miles !== r.award.miles || r.delta.out.program !== r.award.out.program)

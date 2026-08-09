@@ -20,7 +20,7 @@ You give it a vague idea — *"about a week in Europe, around Christmas, 2 adult
 
 Pure static site — `index.html` + vanilla JS/CSS, no build step, no dependencies. Works on phone and desktop. A scheduled GitHub Action ([refresh-data.yml](.github/workflows/refresh-data.yml)) pulls prices into `data/*.json` twice a day; the **Best Options** tab reads those snapshots and ranks destinations by real miles and dollars. No server needed at any point.
 
-`data/config.json` controls what gets fetched: origins, destinations, the date window, trip length, and cabins. Edit it and push — the workflow re-runs automatically.
+`data/config.json` controls what gets fetched: origins, destinations, the date windows, trip length, and cabins. Edit it and push — the workflow re-runs automatically. Or use the in-app **"📡 Fetch these dates now"** button that appears when you browse uncovered dates: after a one-time setup (a fine-grained GitHub token scoped to this repo with Contents read/write, stored only in your browser), the button commits a rotating `custom` window through the GitHub API, which auto-triggers the fetch; fresh prices appear in ~3–5 minutes. Home-airport note: seats.aero's cache is gateway-centric, so when your home airport has no direct cached award the app shows the best hub option labeled "via hub" with the 🏠 line supplying the true from-home total.
 
 ### Setup: connecting real data
 
