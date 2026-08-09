@@ -262,6 +262,9 @@ input[type=checkbox] { accent-color: var(--accent); width: 1rem; height: 1rem; }
   border-top: 1px solid var(--line);
 }
 .bonus-inline select, .bonus-inline input { padding: .28rem .45rem; font-size: .84rem; }
+.presets-row { gap: .35rem .5rem; }
+.preset-btn { font-size: .8rem; padding: .28rem .7rem; }
+#window-presets { display: inline-flex; flex-wrap: wrap; gap: .35rem; }
 .share-btn { margin-left: auto; font-size: .84rem; padding: .35rem .8rem; }
 
 .results-summary { margin: .2rem 0 .8rem; color: var(--muted); font-size: .88rem; }

@@ -80,7 +80,7 @@ function bestCash(origins, dest) {
   let best = null;
   for (const e of DATA.cash.entries) {
     if (!origins.includes(e.origin) || e.dest !== dest || !e.price) continue;
-    if (e.dep < WIN.start || e.dep > WIN.end) continue;
+    if (e.dep < WIN.start || e.dep > (WIN.depEnd || WIN.end)) continue;
     const n = nightsBetween(e.dep, e.ret);
     if (n < min || n > max) continue;
     if (!best || e.price < best.price) best = e;
@@ -91,6 +91,9 @@ function bestCash(origins, dest) {
 function awardLegs(origins, dest, direction, cabin, opts) {
   return DATA.awards.entries.filter((e) => {
     if (e.date < WIN.start || e.date > WIN.end) return false;
+    // Outbound departures stay inside the anchor±flex band; returns may run
+    // up to max-nights past it.
+    if (direction === "out" && WIN.depEnd && e.date > WIN.depEnd) return false;
     const home = direction === "out" ? e.origin : e.dest;
     const away = direction === "out" ? e.dest : e.origin;
     if (!origins.includes(home) || away !== dest || e.cabin !== cabin) return false;
@@ -196,12 +199,17 @@ function dateGridHtml(dest, opts, origins) {
   const cuts = [q(0.2), q(0.4), q(0.6), q(0.8)];
   const binOf = (v) => (v <= cuts[0] ? 0 : v <= cuts[1] ? 1 : v <= cuts[2] ? 2 : v <= cuts[3] ? 3 : 4);
 
-  const days = [];
-  for (let d = new Date(WIN.start + "T00:00:00Z"); fmt(d) <= WIN.end; d = addDays(d, 1)) days.push(fmt(d));
+  const daysFor = (dir) => {
+    const last = dir === "out" ? WIN.depEnd || WIN.end : WIN.end;
+    const out = [];
+    for (let d = new Date(WIN.start + "T00:00:00Z"); fmt(d) <= last; d = addDays(d, 1)) out.push(fmt(d));
+    return out;
+  };
 
   let html =
     '<div class="grid-legend">cheapest <span class="gl q0"></span><span class="gl q1"></span><span class="gl q2"></span><span class="gl q3"></span><span class="gl q4"></span> priciest · ○ nonstop · ◎ best day</div>';
   for (const [label, dir] of dirs) {
+    const days = daysFor(dir);
     const vals = Object.values(byDir[dir]).map(effLegMiles);
     const dirMin = vals.length ? Math.min(...vals) : null;
     html += `<div class="cal-title">${label}</div><div class="cal">`;
@@ -228,8 +236,11 @@ function dateGridHtml(dest, opts, origins) {
 /* ---------- book-now-vs-wait (history percentile) ---------- */
 function trendBadge(code, cabin, currentMiles) {
   if (!DATA.history || !WIN || currentMiles == null) return "";
+  // History is recorded per fetch window — use the one overlapping the view.
+  const histWin = (DATA.config?.windows || []).find((w) => !(WIN.end < w.start || WIN.start > w.end));
+  if (!histWin) return "";
   const key = cabin === "business" ? "b" : "e";
-  const series = DATA.history.map((l) => l.windows?.[WIN.id]?.[code]?.[key]?.m).filter(Boolean);
+  const series = DATA.history.map((l) => l.windows?.[histWin.id]?.[code]?.[key]?.m).filter(Boolean);
   if (series.length < 14) return "";
   const pct = series.filter((v) => v <= currentMiles).length / series.length;
   if (pct <= 0.2)
@@ -242,7 +253,10 @@ function trendBadge(code, cabin, currentMiles) {
 /* ---------- shareable view (URL hash ↔ controls) ---------- */
 function syncHash() {
   const p = new URLSearchParams({
-    w: $("#best-window").value,
+    a: $("#best-anchor").value,
+    f: $("#best-flex").value,
+    n1: $("#best-min-n").value,
+    n2: $("#best-max-n").value,
     o: $("#best-origin").value,
     r: $("#best-region").value,
     c: $("#best-cabin").value,
@@ -258,7 +272,10 @@ function applyHash() {
   if (location.hash.length < 2) return;
   const p = new URLSearchParams(location.hash.slice(1));
   const set = (sel, v) => { if (v != null) $(sel).value = v; };
-  set("#best-window", p.get("w"));
+  set("#best-anchor", p.get("a"));
+  set("#best-flex", p.get("f"));
+  set("#best-min-n", p.get("n1"));
+  set("#best-max-n", p.get("n2"));
   set("#best-origin", p.get("o"));
   set("#best-region", p.get("r"));
   set("#best-cabin", p.get("c"));
@@ -308,10 +325,10 @@ function renderBanner() {
 const LS_WATCH = "awardscout.watch";
 let watchlist = JSON.parse(localStorage.getItem(LS_WATCH) || "[]");
 
-// Watch keys are scoped to the travel window — a Christmas price should
+// Watch keys are scoped to the date range in view — a Christmas price should
 // never be compared against a fall price for the same city.
 function watchKey(dest, cabin) {
-  return dest + "|" + cabin + "|" + (WIN?.id ?? "");
+  return dest + "|" + cabin + "|" + (WIN ? WIN.start + "~" + (WIN.depEnd || WIN.end) : "");
 }
 function toggleWatch(dest, cabin, current) {
   const key = watchKey(dest, cabin);
@@ -320,7 +337,7 @@ function toggleWatch(dest, cabin, current) {
   else
     watchlist.push({
       key, dest, cabin,
-      windowId: WIN?.id ?? null,
+      win: WIN ? { ...WIN, nights: { ...WIN.nights } } : null,
       windowLabel: WIN?.label ?? "",
       miles: current.award?.miles ?? null,
       taxes: current.award ? Math.round(current.award.taxes) : null,
@@ -339,9 +356,9 @@ function watchSection(opts, origins) {
   let html = '<div class="price-label">⭐ Watching</div>';
   const viewWin = WIN;
   for (const w of watchlist) {
-    // Compute the current price inside the item's own window (pre-window
-    // items fall back to the one currently in view).
-    WIN = DATA.config.windows.find((x) => x.id === w.windowId) || viewWin;
+    // Compute the current price inside the item's own saved range (legacy
+    // items may reference a config window id; else fall back to the view).
+    WIN = w.win || DATA.config.windows.find((x) => x.id === w.windowId) || viewWin;
     const award = bestAward(origins, w.dest, w.cabin, { ...opts, nonstop: false });
     const cash = bestCash(origins, w.dest);
     const meta = destByCode(w.dest);
@@ -380,7 +397,20 @@ function renderBest() {
   container.innerHTML = "";
   if (!DATA.config || (!DATA.cash && !DATA.awards)) return;
 
-  WIN = DATA.config.windows.find((w) => w.id === $("#best-window").value) || DATA.config.windows[0];
+  const anchorIso = $("#best-anchor").value;
+  if (!anchorIso) return;
+  const flex = Number($("#best-flex").value);
+  const minN = Math.max(1, Number($("#best-min-n").value) || 6);
+  const maxN = Math.max(minN, Number($("#best-max-n").value) || 9);
+  const A = new Date(anchorIso + "T00:00:00Z");
+  WIN = {
+    id: null,
+    label: `around ${prettyDate(anchorIso)} ± ${flex}d`,
+    start: fmt(addDays(A, -flex)),
+    depEnd: fmt(addDays(A, flex)),
+    end: fmt(addDays(A, flex + maxN)),
+    nights: { min: minN, max: maxN },
+  };
   BONUS = $("#bonus-program").value
     ? { program: $("#bonus-program").value, pct: Number($("#bonus-pct").value) || 0 }
     : null;
@@ -410,8 +440,22 @@ function renderBest() {
 
   const winLine = document.createElement("p");
   winLine.className = "results-summary";
-  winLine.textContent = `${WIN.label}: ${WIN.start} → ${WIN.end}, ${WIN.nights.min}–${WIN.nights.max} nights`;
+  winLine.textContent = `Departures ${WIN.start} → ${WIN.depEnd}, ${WIN.nights.min}–${WIN.nights.max} nights (returns through ${WIN.end})`;
   container.appendChild(winLine);
+
+  // Honest empty state: distinguish "nothing fetched for these dates" from
+  // "filters too strict".
+  const covered =
+    (DATA.awards?.entries || []).some((e) => e.date >= WIN.start && e.date <= WIN.end) ||
+    (DATA.cash?.entries || []).some((e) => e.dep >= WIN.start && e.dep <= WIN.end);
+  if (!covered) {
+    const fetched = (DATA.config.windows || [])
+      .map((w) => `${w.label} (${w.start} → ${w.end})`)
+      .join(" · ");
+    container.innerHTML += `<div class="card"><p class="hint">📭 No price data has been fetched for these dates yet. The nightly refresh currently covers: <strong>${fetched}</strong>. Pick dates inside one of those (the "Jump to" buttons above), or add a window to <code>data/config.json</code> and push — the fetcher picks it up automatically.</p></div>`;
+    syncHash();
+    return;
+  }
 
   const watching = watchSection(opts, origins);
   if (watching) container.appendChild(watching);
@@ -540,19 +584,32 @@ async function initBest() {
     opt.value = opt.textContent = o;
     originSel.appendChild(opt);
   });
-  const winSel = $("#best-window");
+  // "Jump to" presets: one per fetched window — sets the anchor to the
+  // window's midpoint with enough flexibility to cover it.
+  const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
+  const applyWindow = (w) => {
+    const mid = addDays(new Date(w.start + "T00:00:00Z"), Math.floor(daysBetween(w.start, w.end) / 2));
+    $("#best-anchor").value = fmt(mid);
+    const half = Math.ceil(daysBetween(w.start, w.end) / 2);
+    $("#best-flex").value = String([3, 7, 14, 21].find((f) => f >= half) ?? 21);
+    $("#best-min-n").value = w.nights.min;
+    $("#best-max-n").value = w.nights.max;
+  };
+  const presets = $("#window-presets");
   (DATA.config?.windows || []).forEach((w) => {
-    const opt = document.createElement("option");
-    opt.value = w.id;
-    opt.textContent = w.label;
-    winSel.appendChild(opt);
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip preset-btn";
+    b.textContent = w.label;
+    b.addEventListener("click", () => { applyWindow(w); renderBest(); });
+    presets.appendChild(b);
   });
   // Land on the first window that actually has data rather than an empty view.
   const hasData = (w) =>
     (DATA.awards?.entries || []).some((e) => e.date >= w.start && e.date <= w.end) ||
     (DATA.cash?.entries || []).some((e) => e.dep >= w.start && e.dep <= w.end);
-  const firstLive = (DATA.config?.windows || []).find(hasData);
-  if (firstLive) winSel.value = firstLive.id;
+  const firstLive = (DATA.config?.windows || []).find(hasData) || DATA.config?.windows?.[0];
+  if (firstLive) applyWindow(firstLive);
   if (BONUS) {
     $("#bonus-program").value = BONUS.program;
     $("#bonus-pct").value = BONUS.pct;
@@ -566,7 +623,7 @@ async function initBest() {
   });
   renderBanner();
   renderBest();
-  ["#best-window", "#best-origin", "#best-region", "#best-cabin", "#best-sort", "#best-nonstop", "#best-seats", "#best-allprograms", "#bonus-program", "#bonus-pct"].forEach(
+  ["#best-anchor", "#best-flex", "#best-min-n", "#best-max-n", "#best-origin", "#best-region", "#best-cabin", "#best-sort", "#best-nonstop", "#best-seats", "#best-allprograms", "#bonus-program", "#bonus-pct"].forEach(
     (sel) => $(sel).addEventListener("change", renderBest)
   );
 }

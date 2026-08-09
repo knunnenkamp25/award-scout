@@ -34,9 +34,26 @@
   <div class="card controls-card">
     <div class="controls-row">
       <label class="field">
-        <span class="field-label">When</span>
-        <select id="best-window"></select>
+        <span class="field-label">Around</span>
+        <input type="date" id="best-anchor">
       </label>
+      <label class="field">
+        <span class="field-label">Flexibility</span>
+        <select id="best-flex">
+          <option value="3">± 3 days</option>
+          <option value="7">± 1 week</option>
+          <option value="14" selected>± 2 weeks</option>
+          <option value="21">± 3 weeks</option>
+        </select>
+      </label>
+      <div class="field">
+        <span class="field-label">Nights</span>
+        <div class="range-pair">
+          <input type="number" id="best-min-n" value="6" min="1" max="30" aria-label="Minimum nights">
+          <span>–</span>
+          <input type="number" id="best-max-n" value="9" min="1" max="60" aria-label="Maximum nights">
+        </div>
+      </div>
       <label class="field">
         <span class="field-label">From</span>
         <select id="best-origin"></select>
@@ -65,6 +82,10 @@
           <option value="value">Best ¢/mile value</option>
         </select>
       </label>
+    </div>
+    <div class="controls-row checks presets-row">
+      <span class="check-inline">Jump to:</span>
+      <span id="window-presets"></span>
     </div>
     <div class="controls-row checks">
       <label class="check-inline"><input type="checkbox" id="best-nonstop"> Nonstop award only</label>
