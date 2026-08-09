@@ -19,9 +19,19 @@ const PROGRAM_INFO = {
   alaska:         { label: "Alaska Mileage Plan",amex: false, url: "https://www.alaskaair.com/" },
   turkish:        { label: "Turkish Miles&Smiles", amex: false, url: "https://www.turkishairlines.com/" },
   eurobonus:      { label: "SAS EuroBonus",      amex: false, url: "https://www.flysas.com/" },
+  velocity:       { label: "Virgin Australia",   amex: false, url: null },
+  smiles:         { label: "GOL Smiles",         amex: false, url: null },
+  azul:           { label: "Azul TudoAzul",      amex: false, url: null },
+  connectmiles:   { label: "Copa ConnectMiles",  amex: false, url: null },
+  aeromexico:     { label: "Aeromexico Rewards", amex: false, url: null },
+  jetblue:        { label: "JetBlue TrueBlue",   amex: true,  url: "https://www.jetblue.com/" },
 };
 function programInfo(id) {
-  return PROGRAM_INFO[id] || { label: id, amex: false, url: null };
+  // Unknown source ids default to INCLUDED (amex: true): seats.aero may use
+  // ids we didn't predict, and silently hiding a bookable option is worse
+  // than showing an extra one — the "Include non-Amex programs" toggle and
+  // this map's explicit amex:false list stay the filter.
+  return PROGRAM_INFO[id] || { label: id, amex: true, url: null };
 }
 
 const DATA = { config: null, cash: null, awards: null };
@@ -96,11 +106,20 @@ function awardLegs(origins, dest, direction, cabin, opts) {
 // nights range, judged on EFFECTIVE miles (transfer bonus applied).
 // One-way awards book independently, so programs may differ — and in
 // "Any airport" mode the return may land at a different home airport.
+// Reduce a leg list to the cheapest per date first — pairing only constrains
+// dates, so this keeps the double loop tiny even with real-sized data
+// (thousands of legs → at most one per calendar day).
+function cheapestPerDate(legs) {
+  const map = {};
+  for (const e of legs) if (!map[e.date] || effLegMiles(e) < effLegMiles(map[e.date])) map[e.date] = e;
+  return Object.values(map);
+}
+
 function bestAward(origins, dest, cabin, opts) {
   if (!DATA.awards || !WIN) return null;
   const { min, max } = WIN.nights;
-  const outs = awardLegs(origins, dest, "out", cabin, opts);
-  const rets = awardLegs(origins, dest, "ret", cabin, opts);
+  const outs = cheapestPerDate(awardLegs(origins, dest, "out", cabin, opts));
+  const rets = cheapestPerDate(awardLegs(origins, dest, "ret", cabin, opts));
   let best = null;
   for (const o of outs) {
     for (const r of rets) {
@@ -289,8 +308,10 @@ function renderBanner() {
 const LS_WATCH = "awardscout.watch";
 let watchlist = JSON.parse(localStorage.getItem(LS_WATCH) || "[]");
 
+// Watch keys are scoped to the travel window — a Christmas price should
+// never be compared against a fall price for the same city.
 function watchKey(dest, cabin) {
-  return dest + "|" + cabin;
+  return dest + "|" + cabin + "|" + (WIN?.id ?? "");
 }
 function toggleWatch(dest, cabin, current) {
   const key = watchKey(dest, cabin);
@@ -299,6 +320,8 @@ function toggleWatch(dest, cabin, current) {
   else
     watchlist.push({
       key, dest, cabin,
+      windowId: WIN?.id ?? null,
+      windowLabel: WIN?.label ?? "",
       miles: current.award?.miles ?? null,
       taxes: current.award ? Math.round(current.award.taxes) : null,
       cash: current.cash ? Math.round(current.cash.price) : null,
@@ -314,7 +337,11 @@ function watchSection(opts, origins) {
   const wrap = document.createElement("div");
   wrap.className = "card watch-card";
   let html = '<div class="price-label">⭐ Watching</div>';
+  const viewWin = WIN;
   for (const w of watchlist) {
+    // Compute the current price inside the item's own window (pre-window
+    // items fall back to the one currently in view).
+    WIN = DATA.config.windows.find((x) => x.id === w.windowId) || viewWin;
     const award = bestAward(origins, w.dest, w.cabin, { ...opts, nonstop: false });
     const cash = bestCash(origins, w.dest);
     const meta = destByCode(w.dest);
@@ -329,12 +356,13 @@ function watchSection(opts, origins) {
       return ` <span class="${cls}">${d < 0 ? "▼" : "▲"}${val}</span>`;
     };
     html += `<div class="watch-row">
-      <strong>${meta?.city || w.dest}</strong> <span class="dest-code">${w.cabin}</span> ·
+      <strong>${meta?.city || w.dest}</strong> <span class="dest-code">${w.cabin}${w.windowLabel ? " · " + w.windowLabel : ""}</span> ·
       saved ${w.miles ? fmtMiles(w.miles) + " mi" : ""}${w.cash ? " / $" + w.cash : ""} (${new Date(w.when).toLocaleDateString()}) →
       now ${milesNow ? fmtMiles(milesNow) + " mi" : "no award space"}${diff(milesNow, w.miles, "mi")}${cashNow ? " / $" + cashNow : ""}${diff(cashNow, w.cash, "$")}
       <button class="del-btn" title="Stop watching" data-unwatch="${w.key}">✕</button>
     </div>`;
   }
+  WIN = viewWin; // restore the window the rest of the render uses
   wrap.innerHTML = html;
   wrap.querySelectorAll("[data-unwatch]").forEach((btn) =>
     btn.addEventListener("click", () => {

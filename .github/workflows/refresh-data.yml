@@ -12,6 +12,12 @@ permissions:
   contents: write
   issues: write
 
+# Serialize runs — a manual run overlapping the schedule would race the
+# data commit at the end.
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
@@ -52,5 +58,6 @@ jobs:
             echo "No data changes."
           else
             git commit -m "Refresh price data [skip ci]"
+            git pull --rebase origin main
             git push
           fi

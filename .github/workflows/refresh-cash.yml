@@ -35,5 +35,6 @@ jobs:
             echo "No data changes."
           else
             git commit -m "Refresh cash benchmarks [skip ci]"
+            git pull --rebase origin main
             git push
           fi

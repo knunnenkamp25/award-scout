@@ -18,7 +18,10 @@ if (!KEY) {
 const cfg = JSON.parse(fs.readFileSync("data/config.json", "utf8"));
 const HEADERS = { "Partner-Authorization": KEY, Accept: "application/json" };
 const CABIN_BY_LETTER = { Y: "economy", W: "premium", J: "business", F: "first" };
-const MAX_REQUESTS = 120;
+// 12 sweeps (3 windows × 4 directions) with real-world page counts can run
+// well past 120 calls; 250 still leaves half the 1,000/day quota for the
+// second scheduled run.
+const MAX_REQUESTS = 250;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let requestCount = 0;

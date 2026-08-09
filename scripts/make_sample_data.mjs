@@ -24,10 +24,12 @@ function basePrice(dest) {
   return 640; // Europe
 }
 
+// Sample data covers the first configured window only — enough to demo the UI.
+const win = cfg.windows[0];
 const days = [];
 {
-  const d = new Date(cfg.window.start + "T00:00:00Z");
-  const end = new Date(cfg.window.end + "T00:00:00Z");
+  const d = new Date(win.start + "T00:00:00Z");
+  const end = new Date(win.end + "T00:00:00Z");
   while (d <= end) {
     days.push(d.toISOString().slice(0, 10));
     d.setUTCDate(d.getUTCDate() + 1);
@@ -46,11 +48,11 @@ const cash = [];
 for (const origin of cfg.origins) {
   for (const dest of cfg.destinations) {
     for (const dep of days) {
-      for (let n = cfg.nights.min; n <= cfg.nights.max; n++) {
+      for (let n = win.nights.min; n <= win.nights.max; n++) {
         const retD = new Date(dep + "T00:00:00Z");
         retD.setUTCDate(retD.getUTCDate() + n);
         const ret = retD.toISOString().slice(0, 10);
-        if (ret > cfg.window.end) continue;
+        if (ret > win.end) continue;
         if (rnd() < 0.45) continue; // sparse, like real cached data
         const price = Math.round(basePrice(dest) * peak(dep) * (0.85 + rnd() * 0.5));
         cash.push({ origin, dest, dep, ret, price });
