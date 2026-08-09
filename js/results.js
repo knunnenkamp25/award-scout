@@ -310,12 +310,43 @@ function repoInfo() {
   };
 }
 
+let pendingGhAction = null;
+function needToken(action) {
+  pendingGhAction = action;
+  const panel = $("#gh-connect");
+  panel.classList.add("show");
+  panel.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+// Kick the refresh workflow directly (workflow_dispatch) — refetches all
+// configured windows on demand instead of waiting for the schedule.
+async function refreshNow(btn) {
+  const token = localStorage.getItem(LS_GH);
+  if (!token) return needToken(() => refreshNow(btn));
+  const { owner, repo } = repoInfo();
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = "Starting…";
+  try {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/workflows/refresh-data.yml/dispatches`, {
+      method: "POST",
+      headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" },
+      body: JSON.stringify({ ref: "main" }),
+    });
+    if (res.status !== 204) throw new Error("HTTP " + res.status + (res.status === 403 ? " — token needs Actions read/write" : ""));
+    toast("Refresh started — fresh prices in ~3–5 minutes.");
+    btn.textContent = "Refreshing… (~3–5 min)";
+    pollForFreshData(btn, Date.now(), "workflow_dispatch", label);
+  } catch (err) {
+    toast("Couldn't start the refresh: " + err.message);
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
 async function fetchDatesNow(btn) {
   const token = localStorage.getItem(LS_GH);
-  if (!token) {
-    $("#gh-connect").classList.add("show");
-    return;
-  }
+  if (!token) return needToken(() => fetchDatesNow(btn));
   const { owner, repo } = repoInfo();
   btn.disabled = true;
   btn.textContent = "Requesting…";
@@ -347,7 +378,7 @@ async function fetchDatesNow(btn) {
     if (!put.ok) throw new Error("commit failed (HTTP " + put.status + ")");
     toast("Window added — the fetch workflow is starting. ~3–5 minutes.");
     btn.textContent = "Fetching… (~3–5 min)";
-    pollForFreshData(btn, Date.now());
+    pollForFreshData(btn, Date.now(), "push", "📡 Fetch these dates now");
   } catch (err) {
     toast("Couldn't start the fetch: " + err.message);
     btn.disabled = false;
@@ -355,7 +386,7 @@ async function fetchDatesNow(btn) {
   }
 }
 
-function pollForFreshData(btn, startedAt) {
+function pollForFreshData(btn, startedAt, event, restoreLabel) {
   const { owner, repo } = repoInfo();
   const timer = setInterval(async () => {
     if (Date.now() - startedAt > 12 * 60000) {
@@ -364,7 +395,7 @@ function pollForFreshData(btn, startedAt) {
       return;
     }
     try {
-      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs?event=push&per_page=1`);
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs?event=${event}&per_page=1`);
       const r = (await res.json()).workflow_runs?.[0];
       if (r && new Date(r.created_at).getTime() > startedAt - 120000 && r.status === "completed") {
         clearInterval(timer);
@@ -372,9 +403,9 @@ function pollForFreshData(btn, startedAt) {
           toast("Fresh prices are in — reloading.");
           setTimeout(() => location.reload(), 1200);
         } else {
-          toast("The fetch run failed — see the Actions tab for the log.");
+          toast("The run failed — see the Actions tab for the log.");
           btn.disabled = false;
-          btn.textContent = "📡 Fetch these dates now";
+          btn.textContent = restoreLabel;
         }
       }
     } catch { /* transient network error — keep polling */ }
@@ -559,29 +590,11 @@ function renderBest() {
     const fetched = (DATA.config.windows || [])
       .map((w) => `${w.label} (${w.start} → ${w.end})`)
       .join(" · ");
-    const hasToken = !!localStorage.getItem(LS_GH);
     container.innerHTML += `<div class="card">
       <p class="hint">📭 No price data has been fetched for these dates yet. The refresh currently covers: <strong>${fetched}</strong>.</p>
       <button class="btn btn-primary" id="fetch-now">📡 Fetch these dates now</button>
-      <div id="gh-connect" class="gh-connect${hasToken ? "" : ""}">
-        <p class="hint">One-time setup: this button works by committing the new date window to your repo, which auto-triggers the fetch workflow. It needs a GitHub token that <strong>stays in this browser only</strong>.</p>
-        <ol class="hint gh-steps">
-          <li>github.com → Settings → Developer settings → <strong>Fine-grained tokens</strong> → Generate new token</li>
-          <li>Repository access: <strong>only award-scout</strong> · Permissions: <strong>Contents → Read and write</strong></li>
-          <li>Paste it here:</li>
-        </ol>
-        <div class="add-dest-row"><input type="password" id="gh-token-input" placeholder="github_pat_…"><button class="btn btn-ghost" id="gh-token-save">Save</button></div>
-      </div>
     </div>`;
     $("#fetch-now").addEventListener("click", () => fetchDatesNow($("#fetch-now")));
-    $("#gh-token-save")?.addEventListener("click", () => {
-      const v = $("#gh-token-input").value.trim();
-      if (!v) return;
-      localStorage.setItem(LS_GH, v);
-      $("#gh-connect").classList.remove("show");
-      toast("Connected — starting the fetch.");
-      fetchDatesNow($("#fetch-now"));
-    });
     syncHash();
     return;
   }
@@ -746,6 +759,16 @@ async function initBest() {
     $("#bonus-pct").value = BONUS.pct;
   }
   applyHash(); // a shared link overrides the defaults above
+  $("#refresh-data-btn").addEventListener("click", () => refreshNow($("#refresh-data-btn")));
+  $("#gh-token-save").addEventListener("click", () => {
+    const v = $("#gh-token-input").value.trim();
+    if (!v) return;
+    localStorage.setItem(LS_GH, v);
+    $("#gh-token-input").value = "";
+    $("#gh-connect").classList.remove("show");
+    toast("Connected.");
+    if (pendingGhAction) { const a = pendingGhAction; pendingGhAction = null; a(); }
+  });
   $("#share-view")?.addEventListener("click", () => {
     navigator.clipboard?.writeText(location.href).then(
       () => toast("Link copied — opens this exact view."),

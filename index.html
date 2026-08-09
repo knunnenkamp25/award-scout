@@ -102,8 +102,19 @@
         </select>
         <input type="number" id="bonus-pct" min="10" max="50" step="5" value="30" style="width:3.6rem" aria-label="Bonus percent">%
       </span>
+      <button type="button" id="refresh-data-btn" class="btn btn-ghost share-btn" title="Run the fetch workflow now instead of waiting for the twice-daily schedule">📡 Refresh data</button>
       <button type="button" id="share-view" class="btn btn-ghost share-btn">🔗 Share this view</button>
     </div>
+  </div>
+  <div id="gh-connect" class="card gh-connect">
+    <p class="hint"><strong>One-time setup.</strong> Refreshing and fetching from the app works through the GitHub API with a token that <strong>stays in this browser only</strong>:</p>
+    <ol class="hint gh-steps">
+      <li>github.com → Settings → Developer settings → <strong>Fine-grained tokens</strong> → Generate new token</li>
+      <li>Repository access: <strong>only award-scout</strong></li>
+      <li>Permissions: <strong>Contents → Read and write</strong> and <strong>Actions → Read and write</strong></li>
+      <li>Paste it here:</li>
+    </ol>
+    <div class="add-dest-row"><input type="password" id="gh-token-input" placeholder="github_pat_…"><button class="btn btn-ghost" id="gh-token-save">Save</button></div>
   </div>
   <div id="best-results"></div>
 </section>
