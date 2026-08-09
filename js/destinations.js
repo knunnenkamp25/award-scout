@@ -63,6 +63,11 @@ const DESTINATIONS = [
   { code: "BOG", city: "Bogotá",     country: "Colombia",    region: "Latin America", note: "Avianca hub — LifeMiles (Amex 1:1) prices it cheap." },
   { code: "LIM", city: "Lima",       country: "Peru",        region: "Latin America", note: "LATAM via Delta partnership; gateway to Cusco." },
   { code: "SCL", city: "Santiago",   country: "Chile",       region: "Latin America", note: "Delta/LATAM joint venture — real award space from ATL." },
+  { code: "GIG", city: "Rio de Janeiro", country: "Brazil",  region: "Latin America", note: "Priced like São Paulo, but it's Rio — Delta/LATAM via ATL or connections." },
+  { code: "MDE", city: "Medellín",   country: "Colombia",    region: "Latin America", note: "LifeMiles surplus territory; eternal-spring weather." },
+  { code: "SAL", city: "San Salvador", country: "El Salvador", region: "Latin America", note: "Avianca's hub — LifeMiles award space is almost always open." },
+  { code: "UIO", city: "Quito",      country: "Ecuador",     region: "Latin America", note: "Galápagos gateway; low award demand." },
+  { code: "BZE", city: "Belize City", country: "Belize",     region: "Latin America", note: "Short flight, big trip — reefs and ruins; heavy seasonal capacity." },
   { code: "GRU", city: "São Paulo",  country: "Brazil",      region: "Latin America", note: "It's summer there in December; Delta + LATAM partnership." },
   { code: "EZE", city: "Buenos Aires",country:"Argentina",   region: "Latin America", note: "Southern-hemisphere summer; long flight but no jet lag (same time zones)." },
 
@@ -75,6 +80,10 @@ const DESTINATIONS = [
   { code: "NBO", city: "Nairobi",    country: "Kenya",       region: "Africa", note: "Kenya Airways is SkyTeam — Flying Blue books JFK–NBO; safari gateway." },
   { code: "JNB", city: "Johannesburg",country:"South Africa",region: "Africa", note: "Delta ATL–JNB nonstop; Virgin Atlantic points also work via LHR." },
   { code: "CPT", city: "Cape Town",  country: "South Africa",region: "Africa", note: "Delta ATL–CPT nonstop — one of the world's great cities, summer in December." },
+  { code: "ADD", city: "Addis Ababa", country: "Ethiopia",   region: "Africa", note: "Ethiopian flies IAD–ADD nonstop — from YOUR airport, bookable via Aeroplan." },
+  { code: "RAK", city: "Marrakech",  country: "Morocco",     region: "Africa", note: "The Morocco people actually visit; Flying Blue via CDG." },
+  { code: "ZNZ", city: "Zanzibar",   country: "Tanzania",    region: "Africa", note: "KLM serves it from AMS — a Flying Blue award on Amex points few Americans search." },
+  { code: "JRO", city: "Kilimanjaro", country: "Tanzania",   region: "Africa", note: "KLM nonstop from AMS — safari gateway on Flying Blue." },
 
   // --- USA weekends ---
   { code: "MCO", city: "Orlando",    country: "USA",         region: "USA", note: "The baby's first Disney run; Delta nonstops everywhere." },
