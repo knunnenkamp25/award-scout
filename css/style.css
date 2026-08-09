@@ -235,6 +235,46 @@ td.cpm-bad { color: var(--danger); }
 .health-line { margin: 0 0 .2rem; font-size: .75rem; }
 .health-line a { color: var(--muted); }
 
+/* ---- date grid (calendar heatmap) ---- */
+.date-grid { margin-top: .7rem; }
+.date-grid summary { cursor: pointer; font-size: .85rem; color: var(--muted); }
+.grid-legend { font-size: .72rem; color: var(--muted); margin: .5rem 0 .2rem; display: flex; align-items: center; gap: .25rem; flex-wrap: wrap; }
+.gl { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+.cal-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: .6rem 0 .25rem; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-h { font-size: .65rem; color: var(--muted); text-align: center; padding: .1rem 0; }
+.cal-c {
+  border-radius: 4px; min-height: 44px; padding: .2rem .3rem;
+  position: relative; display: flex; flex-direction: column; gap: .05rem;
+}
+.cal-d { font-size: .65rem; opacity: .8; }
+.cal-m { font-size: .78rem; font-weight: 600; }
+.cal-ns { position: absolute; top: .15rem; right: .3rem; font-size: .6rem; }
+.cal-c.empty { border: 1px dashed var(--line); color: var(--muted); font-size: .65rem; }
+.cal-c.best { outline: 2px solid var(--good); outline-offset: 1px; }
+/* validated sequential blue ramp, light mode: darker = more miles */
+.q0 { background: #cde2fb; color: #1a2233; }
+.q1 { background: #9ec5f4; color: #1a2233; }
+.q2 { background: #5598e7; color: #ffffff; }
+.q3 { background: #256abf; color: #ffffff; }
+.q4 { background: #0d366b; color: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  /* on a dark surface the ramp flips so cheap recedes and pricey pops */
+  .q0 { background: #0d366b; color: #b9c6da; }
+  .q1 { background: #184f95; color: #dbe4f0; }
+  .q2 { background: #2a78d6; color: #ffffff; }
+  .q3 { background: #6da7ec; color: #101a2c; }
+  .q4 { background: #cde2fb; color: #101a2c; }
+}
+
+/* ---- trend badge & share ---- */
+.trend-badge {
+  font-size: .72rem; font-weight: 600; padding: .15rem .5rem;
+  border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--bg);
+}
+.trend-badge.good { color: #0ca30c; border-color: #0ca30c; }
+.share-btn { margin-left: auto; font-size: .85rem; }
+
 /* ---- watchlist ---- */
 .watch-btn {
   background: none; border: none; cursor: pointer;

@@ -156,6 +156,100 @@ function positioningLine(a) {
   return `<div class="price-sub pos-line">🏠 ${parts.join(" · ")}${total}</div>`;
 }
 
+/* ---------- date grid (calendar heatmap of award prices) ---------- */
+// Sequential ramp bins q0 (cheapest) → q4 (priciest); colors live in CSS so
+// dark mode can re-map the ramp against its own surface.
+function dateGridHtml(dest, opts, origins) {
+  const dirs = [["Outbound", "out"], ["Return", "ret"]];
+  const byDir = {};
+  const allVals = [];
+  for (const [, dir] of dirs) {
+    const map = {};
+    for (const e of awardLegs(origins, dest, dir, opts.cabin, opts)) {
+      if (!map[e.date] || effLegMiles(e) < effLegMiles(map[e.date])) map[e.date] = e;
+    }
+    byDir[dir] = map;
+    for (const e of Object.values(map)) allVals.push(effLegMiles(e));
+  }
+  if (!allVals.length) return '<p class="hint">No award space matches the current filters in this window.</p>';
+  const sorted = [...allVals].sort((x, y) => x - y);
+  const q = (p) => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
+  const cuts = [q(0.2), q(0.4), q(0.6), q(0.8)];
+  const binOf = (v) => (v <= cuts[0] ? 0 : v <= cuts[1] ? 1 : v <= cuts[2] ? 2 : v <= cuts[3] ? 3 : 4);
+
+  const days = [];
+  for (let d = new Date(WIN.start + "T00:00:00Z"); fmt(d) <= WIN.end; d = addDays(d, 1)) days.push(fmt(d));
+
+  let html =
+    '<div class="grid-legend">cheapest <span class="gl q0"></span><span class="gl q1"></span><span class="gl q2"></span><span class="gl q3"></span><span class="gl q4"></span> priciest · ○ nonstop · ◎ best day</div>';
+  for (const [label, dir] of dirs) {
+    const vals = Object.values(byDir[dir]).map(effLegMiles);
+    const dirMin = vals.length ? Math.min(...vals) : null;
+    html += `<div class="cal-title">${label}</div><div class="cal">`;
+    html += ["S", "M", "T", "W", "T", "F", "S"].map((w) => `<div class="cal-h">${w}</div>`).join("");
+    html += '<div class="cal-pad"></div>'.repeat(new Date(days[0] + "T00:00:00Z").getUTCDay());
+    for (const date of days) {
+      const [, m, dnum] = date.split("-");
+      const dayLabel = dnum === "01" || date === days[0] ? `${Number(m)}/${Number(dnum)}` : Number(dnum);
+      const e = byDir[dir][date];
+      if (!e) {
+        html += `<div class="cal-c empty" title="${date}: no award space">${dayLabel}</div>`;
+        continue;
+      }
+      const eff = effLegMiles(e);
+      const info = programInfo(e.program);
+      const title = `${date}: ${fmtMiles(Math.round(eff))} miles ${info.label}${dir === "out" ? " from " + e.origin : " into " + e.dest}${e.direct ? " · nonstop" : ""}${e.seats ? ` · ${e.seats}+ seats` : ""}`;
+      html += `<div class="cal-c q${binOf(eff)}${eff === dirMin ? " best" : ""}" title="${title}"><span class="cal-d">${dayLabel}</span><span class="cal-m">${fmtMiles(Math.round(eff))}</span>${e.direct ? '<span class="cal-ns">○</span>' : ""}</div>`;
+    }
+    html += "</div>";
+  }
+  return html;
+}
+
+/* ---------- book-now-vs-wait (history percentile) ---------- */
+function trendBadge(code, cabin, currentMiles) {
+  if (!DATA.history || !WIN || currentMiles == null) return "";
+  const key = cabin === "business" ? "b" : "e";
+  const series = DATA.history.map((l) => l.windows?.[WIN.id]?.[code]?.[key]?.m).filter(Boolean);
+  if (series.length < 14) return "";
+  const pct = series.filter((v) => v <= currentMiles).length / series.length;
+  if (pct <= 0.2)
+    return `<span class="trend-badge good" title="Current best is cheaper than ${Math.round((1 - pct) * 100)}% of ${series.length} tracked snapshots">📊 cheapest ${Math.max(1, Math.round(pct * 100))}% ever tracked — book</span>`;
+  if (pct >= 0.8)
+    return `<span class="trend-badge" title="Cheaper prices appeared in ${Math.round((1 - pct) * 100)}% of ${series.length} snapshots">📊 pricier than usual — can wait</span>`;
+  return "";
+}
+
+/* ---------- shareable view (URL hash ↔ controls) ---------- */
+function syncHash() {
+  const p = new URLSearchParams({
+    w: $("#best-window").value,
+    o: $("#best-origin").value,
+    r: $("#best-region").value,
+    c: $("#best-cabin").value,
+    s: $("#best-sort").value,
+  });
+  if ($("#best-nonstop").checked) p.set("ns", "1");
+  if (!$("#best-seats").checked) p.set("st", "0");
+  if ($("#best-allprograms").checked) p.set("ap", "1");
+  if (BONUS) { p.set("bp", BONUS.program); p.set("bx", String(BONUS.pct)); }
+  history.replaceState(null, "", "#" + p.toString());
+}
+function applyHash() {
+  if (location.hash.length < 2) return;
+  const p = new URLSearchParams(location.hash.slice(1));
+  const set = (sel, v) => { if (v != null) $(sel).value = v; };
+  set("#best-window", p.get("w"));
+  set("#best-origin", p.get("o"));
+  set("#best-region", p.get("r"));
+  set("#best-cabin", p.get("c"));
+  set("#best-sort", p.get("s"));
+  $("#best-nonstop").checked = p.get("ns") === "1";
+  if (p.has("st")) $("#best-seats").checked = p.get("st") !== "0";
+  $("#best-allprograms").checked = p.get("ap") === "1";
+  if (p.get("bp")) { $("#bonus-program").value = p.get("bp"); $("#bonus-pct").value = p.get("bx") || "30"; }
+}
+
 /* ---------- rendering ---------- */
 function bestControls() {
   return {
@@ -304,7 +398,7 @@ function renderBest() {
     card.className = "card best-card";
     const rank = `<span class="rank">#${i + 1}</span>`;
     const watched = watchlist.some((w) => w.key === watchKey(r.meta.code, opts.cabin));
-    const head = `<div class="dest-head">${rank}<h3>${r.meta.city}</h3><span class="dest-code">${r.meta.code}${r.meta.country ? " · " + r.meta.country : ""}</span>${r.value != null ? `<span class="value-badge ${r.value >= 1.2 ? "good" : ""}">${r.value.toFixed(1)}¢/mi</span>` : ""}<button class="watch-btn${watched ? " on" : ""}" title="${watched ? "Stop watching" : "Watch this — compare against future prices"}" data-watch="${r.meta.code}">${watched ? "★" : "☆"}</button></div>`;
+    const head = `<div class="dest-head">${rank}<h3>${r.meta.city}</h3><span class="dest-code">${r.meta.code}${r.meta.country ? " · " + r.meta.country : ""}</span>${trendBadge(r.meta.code, opts.cabin, r.award?.miles ?? null)}${r.value != null ? `<span class="value-badge ${r.value >= 1.2 ? "good" : ""}">${r.value.toFixed(1)}¢/mi</span>` : ""}<button class="watch-btn${watched ? " on" : ""}" title="${watched ? "Stop watching" : "Watch this — compare against future prices"}" data-watch="${r.meta.code}">${watched ? "★" : "☆"}</button></div>`;
 
     const fam = familyFactor();
     const cashLabel = DATA.cash?.mode === "anchor" ? "Cash benchmark" : "Cheapest cash";
@@ -327,8 +421,24 @@ function renderBest() {
 
     card.innerHTML = head + `<p class="dest-note">${r.meta.note}</p><div class="blocks">${cashHtml}${awardHtml}${deltaHtml}</div>`;
     card.querySelector("[data-watch]").addEventListener("click", () => toggleWatch(r.meta.code, opts.cabin, r));
+
+    // Date grid renders lazily on first expand — 21 cards × 2 calendars is
+    // too much DOM to build up front.
+    if (DATA.awards) {
+      const det = document.createElement("details");
+      det.className = "date-grid";
+      det.innerHTML = `<summary>📅 Every date in this window</summary><div class="grid-slot"></div>`;
+      det.addEventListener("toggle", () => {
+        if (det.open && !det.dataset.built) {
+          det.querySelector(".grid-slot").innerHTML = dateGridHtml(r.meta.code, opts, origins);
+          det.dataset.built = "1";
+        }
+      });
+      card.appendChild(det);
+    }
     container.appendChild(card);
   });
+  syncHash();
 }
 
 function familyFactor() {
@@ -345,12 +455,17 @@ function awardBlock(title, a, opts, cashPrice) {
   const retInfo = programInfo(a.ret.program);
   const samePro = a.out.program === a.ret.program;
   const programs = samePro ? outInfo.label : `${outInfo.label} out / ${retInfo.label} back`;
-  const links = [...new Set([a.out.program, a.ret.program])]
-    .map((p) => {
-      const info = programInfo(p);
-      return info.url ? `<a class="link-btn" target="_blank" rel="noopener" href="${info.url}">Book ${info.label}</a>` : "";
-    })
-    .join(" ");
+  const liveCheck = (leg, label) =>
+    `<a class="link-btn" target="_blank" rel="noopener" title="Runs a live seats.aero search for this exact leg — cached prices can be hours old" href="https://seats.aero/search?origin=${leg.origin}&destination=${leg.dest}&date=${leg.date}">⚡ ${label}</a>`;
+  const links =
+    [...new Set([a.out.program, a.ret.program])]
+      .map((p) => {
+        const info = programInfo(p);
+        return info.url ? `<a class="link-btn" target="_blank" rel="noopener" href="${info.url}">Book ${info.label}</a>` : "";
+      })
+      .join(" ") +
+    liveCheck(a.out, "Live-check out") +
+    liveCheck(a.ret, "Live-check back");
   const bonused = Math.round(a.eff) < a.miles;
   const bigMiles = bonused
     ? `${fmtMiles(Math.round(a.eff))} <span class="price-unit">effective</span> <span class="price-taxes">(${fmtMiles(a.miles)} − ${BONUS.pct}% bonus)</span>`
@@ -379,6 +494,14 @@ async function initBest() {
     loadJson("data/cash.json"),
     loadJson("data/awards.json"),
   ]);
+  try {
+    const res = await fetch("data/history.ndjson?t=" + Date.now());
+    DATA.history = res.ok
+      ? (await res.text()).split("\n").filter(Boolean)
+          .map((l) => { try { return JSON.parse(l); } catch { return null; } })
+          .filter((l) => l && l.windows)
+      : [];
+  } catch { DATA.history = []; }
   const originSel = $("#best-origin");
   const any = document.createElement("option");
   any.value = "any";
@@ -406,6 +529,13 @@ async function initBest() {
     $("#bonus-program").value = BONUS.program;
     $("#bonus-pct").value = BONUS.pct;
   }
+  applyHash(); // a shared link overrides the defaults above
+  $("#share-view")?.addEventListener("click", () => {
+    navigator.clipboard?.writeText(location.href).then(
+      () => toast("Link copied — opens this exact view."),
+      () => toast(location.href)
+    );
+  });
   renderBanner();
   renderBest();
   ["#best-window", "#best-origin", "#best-region", "#best-cabin", "#best-sort", "#best-nonstop", "#best-seats", "#best-allprograms", "#bonus-program", "#bonus-pct"].forEach(
