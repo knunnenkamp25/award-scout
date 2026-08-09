@@ -19,6 +19,8 @@ const PROGRAM_INFO = {
   alaska:         { label: "Alaska Mileage Plan",amex: false, url: "https://www.alaskaair.com/" },
   turkish:        { label: "Turkish Miles&Smiles", amex: false, url: "https://www.turkishairlines.com/" },
   eurobonus:      { label: "SAS EuroBonus",      amex: false, url: "https://www.flysas.com/" },
+  lufthansa:      { label: "Lufthansa M&M",      amex: false, url: null },
+  ethiopian:      { label: "Ethiopian ShebaMiles", amex: false, url: null },
   velocity:       { label: "Virgin Australia",   amex: false, url: null },
   smiles:         { label: "GOL Smiles",         amex: false, url: null },
   azul:           { label: "Azul TudoAzul",      amex: false, url: null },
@@ -88,8 +90,19 @@ function bestCash(origins, dest) {
   return best;
 }
 
+// Rough FX so non-USD taxes (Aeroplan CAD, Avios GBP…) display sanely.
+// Approximate is fine — taxes are a secondary figure and always shown with ~.
+const FX_TO_USD = { USD: 1, CAD: 0.72, EUR: 1.09, GBP: 1.28, AUD: 0.65, BRL: 0.18, MXN: 0.055, JPY: 0.0066, SEK: 0.095, DKK: 0.146, CHF: 1.12, ISK: 0.0072, CZK: 0.043, JMD: 0.0064 };
+function taxesUsd(e) {
+  if (e.taxes == null) return 0;
+  return e.taxes * (FX_TO_USD[e.taxesCurrency] ?? 1);
+}
+
 function awardLegs(origins, dest, direction, cabin, opts) {
   return DATA.awards.entries.filter((e) => {
+    // Data-quality floor: a real transatlantic (or any) award is never
+    // double-digit miles; Lufthansa rows come through in bogus units.
+    if (e.miles < 1500) return false;
     if (e.date < WIN.start || e.date > WIN.end) return false;
     // Outbound departures stay inside the anchor±flex band; returns may run
     // up to max-nights past it.
@@ -130,7 +143,7 @@ function bestAward(origins, dest, cabin, opts) {
       if (n < min || n > max) continue;
       const eff = effLegMiles(o) + effLegMiles(r);
       if (!best || eff < best.eff) {
-        best = { miles: o.miles + r.miles, eff, taxes: (o.taxes ?? 0) + (r.taxes ?? 0), out: o, ret: r };
+        best = { miles: o.miles + r.miles, eff, taxes: taxesUsd(o) + taxesUsd(r), out: o, ret: r };
       }
     }
   }
