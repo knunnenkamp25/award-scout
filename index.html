@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="Award Scout — turn vague trip ideas into a fan-out of flight searches across cash and miles programs.">
 <title>Award Scout</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=9">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -19,6 +19,7 @@
   <h1><img src="icons/icon.svg" alt="" class="logo">Award Scout <span class="tagline">flexible-family award search</span></h1>
   <nav class="tabs" role="tablist">
     <button class="tab active" data-tab="best" role="tab">Best Options</button>
+    <button class="tab" data-tab="weekend" role="tab">Weekends</button>
     <button class="tab" data-tab="deals" role="tab">Deals</button>
     <button class="tab" data-tab="trends" role="tab">Trends</button>
     <button class="tab" data-tab="search" role="tab">Manual Search</button>
@@ -63,6 +64,8 @@
         <select id="best-region">
           <option value="all">Everywhere</option>
           <option value="Europe" selected>Europe</option>
+          <option value="Latin America">Latin America</option>
+          <option value="Africa">Africa</option>
           <option value="Caribbean/Mexico">Caribbean/Mexico</option>
           <option value="Farther afield">Farther afield</option>
         </select>
@@ -118,6 +121,46 @@
     <div class="add-dest-row"><input type="password" id="gh-token-input" placeholder="github_pat_…"><button class="btn btn-ghost" id="gh-token-save">Save</button></div>
   </div>
   <div id="best-results"></div>
+</section>
+
+<!-- ============ WEEKEND TAB ============ -->
+<section id="tab-weekend" class="tab-panel">
+  <div class="card controls-card">
+    <div class="controls-row">
+      <label class="field">
+        <span class="field-label">First weekend</span>
+        <input type="date" id="wk-start">
+      </label>
+      <label class="field">
+        <span class="field-label">Scan</span>
+        <select id="wk-count">
+          <option value="1">Just that weekend</option>
+          <option value="4" selected>Next 4 weekends</option>
+          <option value="8">Next 8 weekends</option>
+          <option value="12">Next 12 weekends</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">From</span>
+        <select id="wk-origin"></select>
+      </label>
+      <label class="field">
+        <span class="field-label">Where</span>
+        <select id="wk-region">
+          <option value="all" selected>USA + Canada + Caribbean</option>
+          <option value="USA">USA</option>
+          <option value="Canada">Canada</option>
+          <option value="Caribbean/Mexico">Caribbean/Mexico</option>
+        </select>
+      </label>
+    </div>
+    <div class="controls-row checks">
+      <label class="check-inline"><input type="checkbox" id="wk-nonstop" checked> Nonstop only</label>
+      <label class="check-inline"><input type="checkbox" id="wk-seats" checked> Seats for whole family</label>
+      <span class="hint">Thu–Sat departures, home by Monday · economy</span>
+    </div>
+  </div>
+  <div id="wk-results"></div>
 </section>
 
 <!-- ============ DEALS TAB ============ -->
@@ -287,10 +330,12 @@
   <p>Award Scout · static site, no tracking, data stays in your browser · <a href="https://github.com/knunnenkamp25/award-scout" id="repo-link">source</a></p>
 </footer>
 
-<script src="js/destinations.js"></script>
-<script src="js/app.js"></script>
-<script src="js/results.js"></script>
-<script src="js/feeds.js"></script>
+<!-- bump ?v= together with any change to these files: the version query is
+     what defeats browser memory/HTTP caches once the HTML revalidates -->
+<script src="js/destinations.js?v=9"></script>
+<script src="js/app.js?v=9"></script>
+<script src="js/results.js?v=9"></script>
+<script src="js/feeds.js?v=9"></script>
 <script>
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
 </script>

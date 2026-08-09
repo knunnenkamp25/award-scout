@@ -39,7 +39,7 @@ const entries = [];
 for (const window of cfg.windows) {
   const { dep, ret } = anchorFor(window);
   for (const origin of cfg.cash_origins || cfg.origins) {
-  for (const dest of cfg.destinations) {
+  for (const dest of cfg.cash_destinations || cfg.destinations) {
     const p = new URLSearchParams({
       engine: "google_flights",
       departure_id: origin,

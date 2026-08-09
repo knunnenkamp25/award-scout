@@ -13,6 +13,15 @@
   "destinations": [
     "CDG", "AMS", "MXP", "FCO", "MAD", "BCN", "LIS", "DUB", "LHR", "EDI",
     "MUC", "FRA", "VIE", "ZRH", "PRG", "BUD", "CPH", "ARN", "ATH", "KEF", "IST",
+    "SJU", "CUN", "AUA", "SXM", "MBJ", "NAS", "PUJ", "HNL", "NRT",
+    "MEX", "SJO", "LIR", "PTY", "CTG", "BOG", "LIM", "SCL", "GRU", "EZE",
+    "CMN", "CAI", "ACC", "DSS", "LOS", "NBO", "JNB", "CPT",
+    "MCO", "MIA", "TPA", "RSW", "MSY", "BNA", "LAS", "DEN", "ORD", "PWM",
+    "YYZ", "YUL", "YHZ"
+  ],
+  "cash_destinations": [
+    "CDG", "AMS", "MXP", "FCO", "MAD", "BCN", "LIS", "DUB", "LHR", "EDI",
+    "MUC", "FRA", "VIE", "ZRH", "PRG", "BUD", "CPH", "ARN", "ATH", "KEF", "IST",
     "SJU", "CUN", "AUA", "SXM", "MBJ", "HNL", "GRU", "EZE", "NRT"
   ]
 }

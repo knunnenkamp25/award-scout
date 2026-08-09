@@ -31,14 +31,55 @@ const DESTINATIONS = [
   { code: "SXM", city: "St. Maarten",country: "Sint Maarten",region: "Caribbean/Mexico", note: "Delta and partners; famous beach landings." },
   { code: "MBJ", city: "Montego Bay",country: "Jamaica",     region: "Caribbean/Mexico", note: "Wide award availability on Delta." },
 
+  // --- Latin America ---
+  { code: "MEX", city: "Mexico City",country: "Mexico",      region: "Latin America", note: "Aeromexico is SkyTeam — Delta miles and Flying Blue both book it; huge food city." },
+  { code: "SJO", city: "San José",   country: "Costa Rica",  region: "Latin America", note: "Family favorite; Delta nonstop from ATL, frequent award space." },
+  { code: "LIR", city: "Liberia",    country: "Costa Rica",  region: "Latin America", note: "Guanacaste beaches; Delta seasonal nonstops." },
+  { code: "PTY", city: "Panama City",country: "Panama",      region: "Latin America", note: "Copa's hub — LifeMiles and Aeroplan sweet spots via Star Alliance." },
+  { code: "CTG", city: "Cartagena",  country: "Colombia",    region: "Latin America", note: "Old-city charm; one-stop via ATL/MIA hubs." },
+  { code: "BOG", city: "Bogotá",     country: "Colombia",    region: "Latin America", note: "Avianca hub — LifeMiles (Amex 1:1) prices it cheap." },
+  { code: "LIM", city: "Lima",       country: "Peru",        region: "Latin America", note: "LATAM via Delta partnership; gateway to Cusco." },
+  { code: "SCL", city: "Santiago",   country: "Chile",       region: "Latin America", note: "Delta/LATAM joint venture — real award space from ATL." },
+  { code: "GRU", city: "São Paulo",  country: "Brazil",      region: "Latin America", note: "It's summer there in December; Delta + LATAM partnership." },
+  { code: "EZE", city: "Buenos Aires",country:"Argentina",   region: "Latin America", note: "Southern-hemisphere summer; long flight but no jet lag (same time zones)." },
+
+  // --- Africa ---
+  { code: "CMN", city: "Casablanca", country: "Morocco",     region: "Africa", note: "Royal Air Maroc is oneworld — Avios books it; closest African gateway." },
+  { code: "CAI", city: "Cairo",      country: "Egypt",       region: "Africa", note: "Egyptair via Aeroplan (Star Alliance); pyramids in winter = perfect weather." },
+  { code: "ACC", city: "Accra",      country: "Ghana",       region: "Africa", note: "Delta flies JFK–ACC nonstop — SkyMiles territory." },
+  { code: "DSS", city: "Dakar",      country: "Senegal",     region: "Africa", note: "Delta's JFK–DSS nonstop; shortest hop to sub-Saharan Africa." },
+  { code: "LOS", city: "Lagos",      country: "Nigeria",     region: "Africa", note: "Delta ATL–LOS nonstop." },
+  { code: "NBO", city: "Nairobi",    country: "Kenya",       region: "Africa", note: "Kenya Airways is SkyTeam — Flying Blue books JFK–NBO; safari gateway." },
+  { code: "JNB", city: "Johannesburg",country:"South Africa",region: "Africa", note: "Delta ATL–JNB nonstop; Virgin Atlantic points also work via LHR." },
+  { code: "CPT", city: "Cape Town",  country: "South Africa",region: "Africa", note: "Delta ATL–CPT nonstop — one of the world's great cities, summer in December." },
+
+  // --- USA weekends ---
+  { code: "MCO", city: "Orlando",    country: "USA",         region: "USA", note: "The baby's first Disney run; Delta nonstops everywhere." },
+  { code: "MIA", city: "Miami",      country: "USA",         region: "USA", note: "Winter beach weekend; heavy Delta/AA capacity keeps awards cheap." },
+  { code: "TPA", city: "Tampa",      country: "USA",         region: "USA", note: "Gulf beaches; frequent SkyMiles flash-sale target." },
+  { code: "RSW", city: "Fort Myers", country: "USA",         region: "USA", note: "Sanibel/Captiva beaches." },
+  { code: "MSY", city: "New Orleans",country: "USA",         region: "USA", note: "Food weekend; short hop." },
+  { code: "BNA", city: "Nashville",  country: "USA",         region: "USA", note: "Quick fun weekend; very cheap awards." },
+  { code: "LAS", city: "Las Vegas",  country: "USA",         region: "USA", note: "Long weekend classic; deep award inventory." },
+  { code: "DEN", city: "Denver",     country: "USA",         region: "USA", note: "Mountain weekends; watch basic-economy award pricing." },
+  { code: "ORD", city: "Chicago",    country: "USA",         region: "USA", note: "Big-city weekend; constant award sales." },
+  { code: "PWM", city: "Portland",   country: "USA (Maine)", region: "USA", note: "Lobster-roll fall weekends." },
+
+  // --- Canada ---
+  { code: "YYZ", city: "Toronto",    country: "Canada",      region: "Canada", note: "Easy international weekend; Delta + Air Canada both fly it." },
+  { code: "YUL", city: "Montreal",   country: "Canada",      region: "Canada", note: "Feels like Europe without the flight; Aeroplan home turf." },
+  { code: "YHZ", city: "Halifax",    country: "Canada",      region: "Canada", note: "Maritime charm; Air Canada via Aeroplan." },
+
+  // --- Caribbean additions ---
+  { code: "NAS", city: "Nassau",     country: "Bahamas",     region: "Caribbean/Mexico", note: "Shortest true-Caribbean hop; easy weekend." },
+  { code: "PUJ", city: "Punta Cana", country: "Dom. Republic",region:"Caribbean/Mexico", note: "Resort direct flights; wide award availability." },
+
   // --- Elsewhere ---
   { code: "HNL", city: "Honolulu",   country: "USA (Hawaii)",region: "Farther afield", note: "Virgin Atlantic points on Delta metal is a classic Hawaii sweet spot." },
-  { code: "GRU", city: "São Paulo",  country: "Brazil",      region: "Farther afield", note: "It's summer there in December; Delta + LATAM partnership." },
-  { code: "EZE", city: "Buenos Aires",country:"Argentina",   region: "Farther afield", note: "Southern-hemisphere summer; long flight but no jet lag (same time zones)." },
   { code: "NRT", city: "Tokyo",      country: "Japan",       region: "Farther afield", note: "Virgin Atlantic points on Delta metal to Japan is one of the best deals in all of points." },
 ];
 
-const REGIONS = ["Europe", "Caribbean/Mexico", "Farther afield"];
+const REGIONS = ["Europe", "Latin America", "Africa", "Caribbean/Mexico", "USA", "Canada", "Farther afield"];
 
 // Destinations pre-selected the first time the app loads (Europe defaults).
 const DEFAULT_SELECTED = ["CDG", "AMS", "MXP", "FCO", "MAD", "LIS", "DUB", "MUC", "VIE", "CPH"];

@@ -698,7 +698,18 @@ function renderBest() {
   if (watching) container.appendChild(watching);
 
   if (!rows.length) {
-    container.innerHTML += '<p class="results-summary">Nothing matches these filters — try relaxing nonstop/seats, or another region.</p>';
+    // Distinguish "this region's cities aren't fetched yet" from "filters
+    // too strict" — newly added regions have no data until the next refresh.
+    const regionDests = DATA.config.destinations.filter((c) => {
+      const m = destByCode(c);
+      return m && (opts.region === "all" || m.region === opts.region);
+    });
+    const regionHasData = regionDests.some((c) =>
+      (DATA.awards?.entries || []).some((e) => (e.dest === c || e.origin === c) && e.date >= WIN.start && e.date <= WIN.end)
+    );
+    container.innerHTML += regionHasData
+      ? '<p class="results-summary">Nothing matches these filters — try relaxing nonstop/seats, or another region.</p>'
+      : '<div class="card"><p class="hint">📭 This region\'s cities haven\'t been fetched yet — hit <strong>📡 Refresh data</strong> above (the config includes them now), then check back in ~5 minutes.</p></div>';
     return;
   }
 
@@ -824,6 +835,122 @@ function awardBlock(title, a, opts, cashPrice) {
   </div>`;
 }
 
+/* ---------- weekend scanner ---------- */
+// Weekend flexibility is discrete: scan the next N weekends, each modeled as
+// depart Thu–Sat, home by Monday (1–4 nights), economy.
+const WK_REGIONS = ["USA", "Canada", "Caribbean/Mexico"];
+
+function weekendWindows(firstFridayIso, count) {
+  const wins = [];
+  const fri = new Date(firstFridayIso + "T00:00:00Z");
+  for (let i = 0; i < count; i++) {
+    const f = addDays(fri, 7 * i);
+    wins.push({
+      id: "wk" + i,
+      label: `${shortDate(fmt(f))}–${shortDate(fmt(addDays(f, 2)))}`,
+      start: fmt(addDays(f, -1)),   // Thursday
+      depEnd: fmt(addDays(f, 1)),   // Saturday
+      end: fmt(addDays(f, 3)),      // Monday
+      nights: { min: 1, max: 4 },
+    });
+  }
+  return wins;
+}
+
+function renderWeekend() {
+  const container = $("#wk-results");
+  if (!container || !DATA.config) return;
+  container.innerHTML = "";
+  const startIso = $("#wk-start").value;
+  if (!startIso) return;
+  const count = Number($("#wk-count").value);
+  const originVal = $("#wk-origin").value;
+  const origins = originVal === "any" ? DATA.config.origins : [originVal];
+  const region = $("#wk-region").value;
+  const opts = {
+    cabin: "economy",
+    nonstop: $("#wk-nonstop").checked,
+    seatsNeeded: $("#wk-seats").checked ? (DATA.config.adults ?? 2) : 0,
+    allPrograms: false,
+  };
+  const wins = weekendWindows(startIso, count);
+  const dests = DATA.config.destinations.filter((code) => {
+    const meta = destByCode(code);
+    if (!meta || !WK_REGIONS.includes(meta.region)) return false;
+    return region === "all" || meta.region === region;
+  });
+
+  const viewWin = WIN;
+  let anyData = false;
+  const rows = dests
+    .map((code) => {
+      let best = null;
+      for (const w of wins) {
+        WIN = w;
+        const a = bestAward(origins, code, "economy", opts);
+        const c = bestCash(origins, code);
+        if (a || c) anyData = true;
+        if (a && (!best || a.eff < best.award.eff)) best = { award: a, cash: c, weekend: w };
+      }
+      return best ? { meta: destByCode(code), ...best } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.award.eff - b.award.eff);
+  WIN = viewWin;
+
+  if (!rows.length) {
+    container.innerHTML = anyData
+      ? '<p class="results-summary">Award space exists but nothing matches — try unchecking nonstop or scanning more weekends.</p>'
+      : `<div class="card"><p class="hint">📭 No weekend-destination data fetched yet — the config now includes ${dests.length} USA/Canada/Caribbean cities, so hit <strong>📡 Refresh data</strong> on the Best Options tab (or wait for the next scheduled run), then come back.</p></div>`;
+    return;
+  }
+
+  const summary = document.createElement("p");
+  summary.className = "results-summary";
+  summary.textContent = `${rows.length} getaways across ${count} weekend${count > 1 ? "s" : ""} from ${originVal === "any" ? "any airport" : originVal} — ranked by fewest miles.`;
+  container.appendChild(summary);
+
+  const saveWin = WIN;
+  rows.forEach((r, i) => {
+    WIN = r.weekend; // awardBlock helpers (positioning etc.) read WIN
+    const card = document.createElement("div");
+    card.className = "card best-card";
+    card.innerHTML =
+      `<div class="dest-head"><span class="rank">#${i + 1}</span><h3>${r.meta.city}</h3><span class="dest-code">${r.meta.code} · ${r.meta.country}</span><span class="value-badge">🗓 ${r.weekend.label}</span></div>` +
+      `<p class="dest-note">${r.meta.note}</p>` +
+      `<div class="blocks">${awardBlock("Best weekend award", r.award, opts, r.cash?.price)}` +
+      (r.cash
+        ? `<div class="price-block"><div class="price-label">Cash benchmark</div><div class="price-big">$${Math.round(r.cash.price).toLocaleString()}</div><div class="price-sub">from ${r.cash.origin} · per person</div></div>`
+        : "") +
+      `</div>`;
+    container.appendChild(card);
+  });
+  WIN = saveWin;
+}
+
+function initWeekend() {
+  const originSel = $("#wk-origin");
+  if (!originSel || !DATA.config) return;
+  const any = document.createElement("option");
+  any.value = "any";
+  any.textContent = "Any airport";
+  originSel.appendChild(any);
+  DATA.config.origins.forEach((o) => {
+    const opt = document.createElement("option");
+    opt.value = opt.textContent = o;
+    originSel.appendChild(opt);
+  });
+  if (DATA.config.home) originSel.value = DATA.config.home; // weekends start from home
+  // default to the next Friday
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + ((5 - d.getUTCDay() + 7) % 7 || 7));
+  $("#wk-start").value = fmt(d);
+  ["#wk-start", "#wk-count", "#wk-origin", "#wk-region", "#wk-nonstop", "#wk-seats"].forEach((sel) =>
+    $(sel).addEventListener("change", renderWeekend)
+  );
+  renderWeekend();
+}
+
 /* ---------- init ---------- */
 async function initBest() {
   [DATA.config, DATA.cash, DATA.awards] = await Promise.all([
@@ -898,6 +1025,7 @@ async function initBest() {
   });
   renderBanner();
   renderBest();
+  initWeekend();
   ["#best-anchor", "#best-flex", "#best-min-n", "#best-max-n", "#best-origin", "#best-region", "#best-cabin", "#best-sort", "#best-nonstop", "#best-seats", "#best-allprograms", "#bonus-program", "#bonus-pct"].forEach(
     (sel) => $(sel).addEventListener("change", renderBest)
   );
